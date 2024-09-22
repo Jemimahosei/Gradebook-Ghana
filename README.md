@@ -87,6 +87,9 @@ Our current focus is on the **backend development**, which involves integrating 
 ### Completed Milestones:
 - **Frontend Development**: The entire UI for all user roles has been completed.
 - **Initial Testing**: We’ve conducted frontend tests to ensure that the interface is responsive and user-friendly.
+![Sign In page](signin.JPG)
+![Administrative Dashboard](admindashboard.png)
+![Student Report View and download](studentreport.png)
   
 ### Ongoing Tasks:
 - **Backend Integration**: MongoDB is being used to store assessment data, user profiles, and grading schemas. Next.js is responsible for rendering server-side logic, ensuring real-time data updates and interactions between teachers, students, and the admin.
