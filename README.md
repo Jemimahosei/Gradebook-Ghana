@@ -49,7 +49,7 @@ To ensure that the system meets the needs of all users, wireframes were be desig
 
 ![Student Section Design](./images/picture.png)
 ![teacher Section Design](./images/picture.png)
-![Ladministrative section design](./images/picture.png)
+![Ladministrative section design](administrativeSection.png)
 
 
 
