@@ -47,6 +47,13 @@ To ensure that the system meets the needs of all users, wireframes were be desig
 
 **Rationale**: Wireframing ensures that the design is user-friendly before development begins. It’s easier and faster to make adjustments to wireframes than to make changes after coding has started.
 
+![Student Section Design](./images/picture.png)
+![teacher Section Design](./images/picture.png)
+![Ladministrative section design](./images/picture.png)
+
+
+
+
 ---
 
 ## Color Theme and Branding
