@@ -1,0 +1,441 @@
+/* Gradebook Ghana — plain CSS, primary green #76B900, white background. */
+
+:root {
+  --green: #76b900;
+  --green-dark: #5a8f00;
+  --green-light: #eef6dc;
+  --text: #1a1a1a;
+  --muted: #5c5c5c;
+  --border: #d9d9d9;
+  --danger: #b3261e;
+  --danger-bg: #fdecea;
+  --radius: 8px;
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+  background: #fff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #fff;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 0.45rem 0.9rem;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--green);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.btn-primary {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--green-dark);
+  border-color: var(--green-dark);
+}
+
+.btn-danger {
+  color: var(--danger);
+  border-color: #e5a8a3;
+}
+
+.btn-danger:hover {
+  background: var(--danger-bg);
+}
+
+.link-button {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--green-dark);
+  text-decoration: underline;
+}
+
+input,
+select {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.65rem;
+  width: 100%;
+  background: #fff;
+}
+
+input:focus,
+select:focus {
+  outline: 2px solid var(--green);
+  outline-offset: 1px;
+}
+
+h1 {
+  font-size: 1.9rem;
+  margin: 0 0 0.5rem;
+}
+
+h2 {
+  font-size: 1.25rem;
+  margin: 1.75rem 0 0.75rem;
+}
+
+h3 {
+  font-size: 1.05rem;
+  margin: 0 0 0.75rem;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.success {
+  color: var(--green-dark);
+  font-weight: 600;
+}
+
+.error-banner {
+  background: var(--danger-bg);
+  border: 1px solid #e5a8a3;
+  color: var(--danger);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.top-notice {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1rem 1rem 0;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  background: var(--green);
+  color: #fff;
+  padding: 1rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.brand {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.brand-sub {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.header-user {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.app-main {
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1rem 1.5rem 2rem;
+  flex: 1;
+}
+
+.app-footer {
+  text-align: center;
+  padding: 1rem;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+
+.login-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.login-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2rem;
+}
+
+.form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.demo-box {
+  margin-top: 2rem;
+  background: var(--green-light);
+  border: 1px solid #cfe3a8;
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+}
+
+.demo-box h2 {
+  margin-top: 0;
+  font-size: 1rem;
+}
+
+.demo-box ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+  border-bottom: 2px solid var(--green-light);
+  padding-bottom: 0.5rem;
+}
+
+.tab {
+  border: none;
+  background: none;
+  font-weight: 600;
+  padding: 0.5rem 0.75rem;
+}
+
+.tab.active {
+  background: var(--green);
+  color: #fff;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .split {
+    grid-template-columns: 1fr;
+  }
+
+  .app-main {
+    padding: 1rem;
+  }
+
+  .login-card {
+    padding: 1.25rem;
+  }
+}
+
+.form-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.field small {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  max-width: 640px;
+}
+
+@media (max-width: 560px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 480px;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  background: var(--green-light);
+}
+
+tr.selected-row td {
+  background: var(--green-light);
+}
+
+td.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+td input[type='number'] {
+  max-width: 140px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.stat-card {
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--green);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+.stat-title {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.stat-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 0.25rem 0;
+}
+
+.stat-sub {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.subject-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.subject-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  text-align: center;
+}
+
+.subject-name {
+  font-weight: 700;
+}
+
+.subject-average {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--green-dark);
+  margin: 0.5rem 0;
+}
+
+.subject-letter {
+  font-weight: 600;
+}
+
+.score-grid {
+  margin-top: 1.5rem;
+  border-top: 2px solid var(--green-light);
+  padding-top: 0.5rem;
+}
+
+/* Teacher grade grid: two small inputs (CW 30% / Exam 70%) per subject cell. */
+.grade-cell {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.grade-cell input[type='number'] {
+  max-width: 64px;
+  padding: 0.35rem 0.4rem;
+}
+
+/* Subject assignment picker in the teacher's My Subjects tab. */
+.subject-card-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+  background: #fff;
+}
+
+.subject-card-btn.active {
+  border: 2px solid var(--green);
+  background: var(--green-light);
+}
