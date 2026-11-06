@@ -5,10 +5,12 @@ import type {
   AdminDashboard as AdminDashboardData,
   AdminStudent,
   AdminUserRow,
+  AssignmentRow,
   GradingScale,
   SchoolClass,
   SchoolProfile,
   Subject,
+  TeacherRow,
 } from '../lib/api';
 import { Card, Empty, ErrorBanner, Field, Loading, errorText, isUnauthorized } from '../components';
 
@@ -20,7 +22,15 @@ import { Card, Empty, ErrorBanner, Field, Loading, errorText, isUnauthorized } f
  */
 export default function AdminDashboard({ onSessionExpired }: { onSessionExpired: () => void }) {
   const [tab, setTab] = useState<
-    'dashboard' | 'classes' | 'subjects' | 'students' | 'scales' | 'school' | 'users'
+    | 'dashboard'
+    | 'classes'
+    | 'subjects'
+    | 'students'
+    | 'teachers'
+    | 'assignments'
+    | 'scales'
+    | 'school'
+    | 'users'
   >('dashboard');
   const [error, setError] = useState<string | null>(null);
 
@@ -43,6 +53,8 @@ export default function AdminDashboard({ onSessionExpired }: { onSessionExpired:
             ['classes', 'Classes'],
             ['subjects', 'Subjects'],
             ['students', 'Students'],
+            ['teachers', 'Teachers'],
+            ['assignments', 'Assignments'],
             ['scales', 'Grading scale'],
             ['school', 'School profile'],
             ['users', 'Users'],
@@ -62,6 +74,8 @@ export default function AdminDashboard({ onSessionExpired }: { onSessionExpired:
       {tab === 'classes' && <ClassManager onFail={onFail} />}
       {tab === 'subjects' && <SubjectManager onFail={onFail} />}
       {tab === 'students' && <StudentManager onFail={onFail} />}
+      {tab === 'teachers' && <TeacherManager onFail={onFail} />}
+      {tab === 'assignments' && <AssignmentManager onFail={onFail} />}
       {tab === 'scales' && <ScaleManager onFail={onFail} />}
       {tab === 'school' && <SchoolPanel onFail={onFail} />}
       {tab === 'users' && <UserList onFail={onFail} />}
@@ -86,8 +100,35 @@ function DashboardPanel({ onFail }: { onFail: (err: unknown) => void }) {
   if (loading) return <Loading />;
   if (!data) return <Empty text="No dashboard data available." />;
 
+  const isEmptySchool =
+    data.studentCount === 0 && data.teacherCount === 0 && data.classCount === 0;
+
   return (
     <div>
+      {isEmptySchool && (
+        <div className="demo-box" role="note">
+          <h2>Getting started</h2>
+          <p>Your school is set up. To get grading:</p>
+          <ol>
+            <li>
+              <strong>Add teachers</strong> under the Teachers tab — each gets a login you can
+              share with them.
+            </li>
+            <li>
+              <strong>Add classes</strong> under the Classes tab and pick a class teacher for
+              each.
+            </li>
+            <li>
+              <strong>Add students</strong> under the Students tab, into their classes.
+            </li>
+            <li>Teachers sign in, enter marks, and publish. Students see their report cards.</li>
+          </ol>
+          <p className="small">
+            Your school already has the standard WAEC grading scale and subject list filled in —
+            change them under Grading scale and Subjects if you need to.
+          </p>
+        </div>
+      )}
       <div className="stats-grid">
         <Card title="Students" value={String(data.studentCount)} />
         <Card title="Teachers" value={String(data.teacherCount)} />
@@ -494,8 +535,12 @@ function StudentManager({ onFail }: { onFail: (err: unknown) => void }) {
         await adminApi.updateStudent(editing.id, body);
         setNotice('Student updated.');
       } else {
-        await adminApi.createStudent(body);
-        setNotice('Student created — login password is the demo password (demo123).');
+        const created = await adminApi.createStudent(body);
+        setNotice(
+          created.temporaryPassword
+            ? `Student created — login: ${created.loginUsername ?? created.indexNumber} / temporary password: ${created.temporaryPassword}. Share this with the student.`
+            : 'Student created.',
+        );
       }
       resetForm();
       refresh();
@@ -602,6 +647,295 @@ function StudentManager({ onFail }: { onFail: (err: unknown) => void }) {
                       </button>
                       <button type="button" className="btn-danger" onClick={() => void remove(r)}>
                         Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------- teachers
+
+function TeacherManager({ onFail }: { onFail: (err: unknown) => void }) {
+  const [rows, setRows] = useState<TeacherRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [subject, setSubject] = useState('');
+  const [password, setPassword] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const refresh = useCallback(() => {
+    setLoading(true);
+    adminApi
+      .teachers()
+      .then(setRows)
+      .catch(onFail)
+      .finally(() => setLoading(false));
+  }, [onFail]);
+
+  useEffect(refresh, [refresh]);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setNotice(null);
+    try {
+      const created = await adminApi.createTeacher({
+        fullName: fullName.trim(),
+        email: email.trim(),
+        subject: subject.trim(),
+        password: password.trim(),
+      });
+      setNotice(
+        created.temporaryPassword
+          ? `Teacher created — login: ${created.loginUsername ?? created.email} / temporary password: ${created.temporaryPassword}. Share this with the teacher; there is no email sending.`
+          : `Teacher created — login: ${created.loginUsername ?? created.email} with the password you set.`,
+      );
+      setFullName('');
+      setEmail('');
+      setSubject('');
+      setPassword('');
+      refresh();
+    } catch (err) {
+      onFail(err);
+    }
+  }
+
+  async function remove(row: TeacherRow) {
+    if (!window.confirm(`Delete teacher "${row.fullName}" (${row.email})?`)) return;
+    try {
+      await adminApi.deleteTeacher(row.id);
+      refresh();
+    } catch (err) {
+      onFail(err);
+    }
+  }
+
+  return (
+    <div className="split">
+      <form onSubmit={submit} className="form-card">
+        <h2>Add teacher</h2>
+        <Field label="Full name">
+          <input value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="e.g. Mrs. Asante" />
+        </Field>
+        <Field label="Email" hint="The teacher's login username.">
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="teacher@yourschool.edu.gh" />
+        </Field>
+        <Field label="Main subject">
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. Integrated Science" />
+        </Field>
+        <Field
+          label="Password (optional)"
+          hint="Leave blank and the system generates a temporary password, shown to you once after creating the teacher."
+        >
+          <input
+            type="text"
+            autoComplete="off"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            minLength={6}
+            placeholder="Leave blank for a generated password"
+          />
+        </Field>
+        <div className="form-actions">
+          <button type="submit" className="btn-primary">
+            Create teacher
+          </button>
+        </div>
+        {notice && <p className="success">{notice}</p>}
+      </form>
+      <div>
+        <h2>Teachers</h2>
+        {loading ? (
+          <Loading />
+        ) : rows.length === 0 ? (
+          <Empty text="No teachers yet." />
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Main subject</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id}>
+                    <td>{r.fullName}</td>
+                    <td>{r.email}</td>
+                    <td>{r.subject ?? '—'}</td>
+                    <td className="actions">
+                      <button type="button" className="btn-danger" onClick={() => void remove(r)}>
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------- assignments
+
+function AssignmentManager({ onFail }: { onFail: (err: unknown) => void }) {
+  const [rows, setRows] = useState<AssignmentRow[]>([]);
+  const [teachers, setTeachers] = useState<TeacherRow[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [classes, setClasses] = useState<SchoolClass[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [teacherId, setTeacherId] = useState<number | ''>('');
+  const [subjectId, setSubjectId] = useState<number | ''>('');
+  const [classId, setClassId] = useState<number | ''>('');
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const refresh = useCallback(() => {
+    setLoading(true);
+    Promise.all([
+      adminApi.assignments(),
+      adminApi.teachers(),
+      adminApi.subjects(),
+      adminApi.classes(),
+    ])
+      .then(([a, t, s, c]) => {
+        setRows(a);
+        setTeachers(t);
+        setSubjects(s);
+        setClasses(c);
+      })
+      .catch(onFail)
+      .finally(() => setLoading(false));
+  }, [onFail]);
+
+  useEffect(refresh, [refresh]);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setNotice(null);
+    if (teacherId === '' || subjectId === '' || classId === '') return;
+    try {
+      await adminApi.createAssignment({ teacherId, subjectId, classId });
+      setNotice('Assignment created.');
+      setTeacherId('');
+      setSubjectId('');
+      setClassId('');
+      refresh();
+    } catch (err) {
+      onFail(err);
+    }
+  }
+
+  async function remove(row: AssignmentRow) {
+    if (
+      !window.confirm(
+        `Remove ${row.teacherName} from ${row.subjectName} in ${row.className}?`,
+      )
+    )
+      return;
+    try {
+      await adminApi.deleteAssignment(row.id);
+      refresh();
+    } catch (err) {
+      onFail(err);
+    }
+  }
+
+  return (
+    <div className="split">
+      <form onSubmit={submit} className="form-card">
+        <h2>Assign a teacher</h2>
+        <p className="small">
+          A class teacher is automatically assigned to their class&rsquo;s subjects when the class
+          is created. Use this form for subject teachers, or to change who teaches what.
+        </p>
+        <Field label="Teacher">
+          <select
+            value={teacherId}
+            onChange={(e) => setTeacherId(e.target.value === '' ? '' : Number(e.target.value))}
+            required
+          >
+            <option value="">Choose a teacher</option>
+            {teachers.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.fullName} ({t.email})
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Subject">
+          <select
+            value={subjectId}
+            onChange={(e) => setSubjectId(e.target.value === '' ? '' : Number(e.target.value))}
+            required
+          >
+            <option value="">Choose a subject</option>
+            {subjects.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Class">
+          <select
+            value={classId}
+            onChange={(e) => setClassId(e.target.value === '' ? '' : Number(e.target.value))}
+            required
+          >
+            <option value="">Choose a class</option>
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <div className="form-actions">
+          <button type="submit" className="btn-primary">
+            Create assignment
+          </button>
+        </div>
+        {notice && <p className="success">{notice}</p>}
+      </form>
+      <div>
+        <h2>Assignments</h2>
+        {loading ? (
+          <Loading />
+        ) : rows.length === 0 ? (
+          <Empty text="No assignments yet." />
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Teacher</th>
+                  <th>Subject</th>
+                  <th>Class</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id}>
+                    <td>{r.teacherName}</td>
+                    <td>{r.subjectName}</td>
+                    <td>{r.className}</td>
+                    <td className="actions">
+                      <button type="button" className="btn-danger" onClick={() => void remove(r)}>
+                        Remove
                       </button>
                     </td>
                   </tr>
@@ -772,6 +1106,7 @@ function SchoolPanel({ onFail }: { onFail: (err: unknown) => void }) {
   const [school, setSchool] = useState<SchoolProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
+  const [town, setTown] = useState('');
   const [region, setRegion] = useState('');
   const [address, setAddress] = useState('');
   const [email, setEmail] = useState('');
@@ -784,6 +1119,7 @@ function SchoolPanel({ onFail }: { onFail: (err: unknown) => void }) {
       .then((s) => {
         setSchool(s);
         setName(s.name);
+        setTown(s.town ?? '');
         setRegion(s.region ?? '');
         setAddress(s.address ?? '');
         setEmail(s.email ?? '');
@@ -799,6 +1135,7 @@ function SchoolPanel({ onFail }: { onFail: (err: unknown) => void }) {
     try {
       const updated = await adminApi.updateSchool({
         name: name.trim(),
+        town: town.trim() || null,
         region: region.trim() || null,
         address: address.trim() || null,
         email: email.trim() || null,
@@ -819,6 +1156,9 @@ function SchoolPanel({ onFail }: { onFail: (err: unknown) => void }) {
       <h2>School profile</h2>
       <Field label="School name">
         <input value={name} onChange={(e) => setName(e.target.value)} required />
+      </Field>
+      <Field label="Town">
+        <input value={town} onChange={(e) => setTown(e.target.value)} placeholder="e.g. Kumasi" />
       </Field>
       <Field label="Region">
         <input value={region} onChange={(e) => setRegion(e.target.value)} placeholder="e.g. Ashanti Region" />
@@ -880,8 +1220,8 @@ function UserList({ onFail }: { onFail: (err: unknown) => void }) {
         </tbody>
       </table>
       <p className="small">
-        Staff accounts are seeded by the demo data. Students are managed under the Students
-        tab and log in with their index number.
+        Teacher accounts are created under the Teachers tab. Students are managed under the
+        Students tab and log in with their index number.
       </p>
     </div>
   );

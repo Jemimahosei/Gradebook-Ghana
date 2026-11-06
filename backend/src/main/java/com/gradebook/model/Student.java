@@ -17,6 +17,13 @@ public class Student {
     @JoinColumn(name = "class_id")
     private SchoolClass schoolClass;
 
+    /** The student's school (denormalised from the class so a student
+     * without a class yet still belongs to a school). Null only for
+     * pre-upgrade rows (backfilled on boot). */
+    @ManyToOne
+    @JoinColumn(name = "school_id")
+    private School school;
+
     public Long getId() { return id; }
     public String getFullName() { return fullName; }
     public String getIndexNumber() { return indexNumber; }
@@ -25,6 +32,7 @@ public class Student {
     public int getYear() { return year; }
     public String getRole() { return role; }
     public SchoolClass getSchoolClass() { return schoolClass; }
+    public School getSchool() { return school; }
     public void setId(Long id) { this.id = id; }
     public void setFullName(String n) { this.fullName = n; }
     public void setIndexNumber(String i) { this.indexNumber = i; }
@@ -33,4 +41,5 @@ public class Student {
     public void setYear(int y) { this.year = y; }
     public void setRole(String r) { this.role = r; }
     public void setSchoolClass(SchoolClass c) { this.schoolClass = c; }
+    public void setSchool(School s) { this.school = s; }
 }

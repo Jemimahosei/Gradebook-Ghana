@@ -58,8 +58,12 @@ public class GradeController {
     }
 
     @GetMapping
-    public List<Map<String, Object>> getAll() {
-        List<Grade> grades = gradeRepo.findAll();
+    public List<Map<String, Object>> getAll(Authentication auth) {
+        // Only this school's grades: a grade belongs to a school through its student.
+        com.gradebook.model.School school = current.currentSchool(auth);
+        List<Grade> grades = gradeRepo.findAll().stream()
+                .filter(g -> current.sameSchool(current.schoolOfStudent(g.getStudent()), school))
+                .toList();
         List<Map<String, Object>> result = new ArrayList<>();
         for (Grade g : grades) {
             Map<String, Object> m = new HashMap<>();
@@ -79,10 +83,12 @@ public class GradeController {
     @PostMapping("/batch")
     public Map<String, Object> saveBatch(Authentication auth, @RequestBody List<GradeRequest> requests) {
         Teacher teacher = current.currentTeacher(auth);
+        com.gradebook.model.School school = current.schoolOfTeacher(teacher);
         String semester = props.semester();
         int saved = 0;
         for (GradeRequest req : requests) {
-            Subject subject = subjectRepo.findByName(req.getSubject())
+            // Subject names are only unique within a school — look it up there.
+            Subject subject = subjectRepo.findBySchoolAndName(school, req.getSubject())
                     .orElseThrow(() -> new IllegalArgumentException("Unknown subject: " + req.getSubject()));
             gradeService.enterGrade(req.getStudentId(), subject.getId(), teacher,
                     req.getClassScore(), req.getExamScore(), semester);

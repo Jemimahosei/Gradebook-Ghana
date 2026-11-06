@@ -20,6 +20,7 @@ import com.gradebook.repository.SubjectAssignmentRepository;
 import com.gradebook.repository.SubjectRepository;
 import com.gradebook.repository.TeacherRepository;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -41,6 +42,7 @@ import java.util.Map;
  *                           so the report card works immediately)
  */
 @Component
+@Order(2)
 public class DataSeeder implements CommandLineRunner {
 
     private final TeacherRepository teacherRepo;
@@ -54,6 +56,9 @@ public class DataSeeder implements CommandLineRunner {
     private final GradeRepository gradeRepo;
     private final PasswordEncoder encoder;
     private final GradebookProperties props;
+
+    /** The school being seeded — every seeded row belongs to it. */
+    private School seedSchool;
 
     public DataSeeder(TeacherRepository teacherRepo, StudentRepository studentRepo,
                       SubjectRepository subjectRepo, SchoolClassRepository classRepo,
@@ -84,24 +89,22 @@ public class DataSeeder implements CommandLineRunner {
 
         // --- School ---
         School school = new School("Demo Senior High School", "Ashanti Region");
+        school.setDemo(true);
         schoolRepo.save(school);
+        seedSchool = school;
 
         // --- WAEC grading scale (admin-editable; these are the defaults) ---
-        scaleRepo.save(new GradingScale("A1", 90, 100, "Excellent"));
-        scaleRepo.save(new GradingScale("B2", 80, 89, "Very Good"));
-        scaleRepo.save(new GradingScale("B3", 70, 79, "Good"));
-        scaleRepo.save(new GradingScale("C4", 60, 69, "Credit"));
-        scaleRepo.save(new GradingScale("C5", 55, 59, "Credit"));
-        scaleRepo.save(new GradingScale("C6", 50, 54, "Credit"));
-        scaleRepo.save(new GradingScale("D7", 45, 49, "Pass"));
-        scaleRepo.save(new GradingScale("E8", 40, 44, "Pass"));
-        scaleRepo.save(new GradingScale("F9", 0, 39, "Fail"));
+        for (GradingScale s : AuthService.waecScaleRows()) {
+            s.setSchool(school);
+            scaleRepo.save(s);
+        }
 
         // --- Admin ---
         Admin admin = new Admin();
         admin.setFullName("Demo Admin");
         admin.setEmail("admin@demo");
         admin.setPassword(demoHash);
+        admin.setSchool(school);
         adminRepo.save(admin);
 
         // --- Teachers ---
@@ -216,6 +219,7 @@ public class DataSeeder implements CommandLineRunner {
         t.setEmail(email);
         t.setPassword(hash);
         t.setSubject(subject);
+        t.setSchool(seedSchool);
         return teacherRepo.save(t);
     }
 
@@ -225,6 +229,7 @@ public class DataSeeder implements CommandLineRunner {
         sc.setProgramme(programme);
         sc.setFormYear(formYear);
         sc.setClassTeacher(classTeacher);
+        sc.setSchool(seedSchool);
         return classRepo.save(sc);
     }
 
@@ -233,6 +238,7 @@ public class DataSeeder implements CommandLineRunner {
         s.setName(name);
         s.setProgramme(programme);
         s.setCore(isCore);
+        s.setSchool(seedSchool);
         return subjectRepo.save(s);
     }
 
@@ -255,6 +261,7 @@ public class DataSeeder implements CommandLineRunner {
             st.setProgramme(programme);
             st.setYear(year);
             st.setSchoolClass(schoolClass);
+            st.setSchool(seedSchool);
             out.add(studentRepo.save(st));
         }
         return out;

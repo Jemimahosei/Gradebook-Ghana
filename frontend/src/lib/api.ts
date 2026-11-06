@@ -1,8 +1,8 @@
 /**
- * API client for the Gradebook Ghana prototype.
+ * API client for Gradebook Ghana.
  *
  * Backend: Spring Boot on http://localhost:8080/api, JWT Bearer auth.
- * The JWT is stored in localStorage after login (demo only) and cleared
+ * The JWT is stored in localStorage after login and cleared
  * on logout and on any 401 response. Demo credentials are shown on the
  * login page; the JWT secret is env-based on the server (dev default
  * only — see backend application.properties).
@@ -20,12 +20,20 @@ export type Role = 'ADMIN' | 'TEACHER' | 'STUDENT';
 export interface AuthUser {
   name: string;
   role: Role;
+  /** The user's own school (shown in the app header). Absent for sessions
+   * stored before the multi-school upgrade — App.tsx hydrates it via me(). */
+  schoolId?: number | null;
+  schoolName?: string | null;
+  demoSchool?: boolean;
 }
 
 export interface AuthResponse {
   token: string;
   role: Role;
   name: string;
+  schoolId: number | null;
+  schoolName: string | null;
+  demoSchool: boolean;
 }
 
 /** One cell of the teacher's My Class grid: 30% class work + 70% exam. */
@@ -165,6 +173,39 @@ export interface AdminStudent {
   year: number;
   classId: number | null;
   className: string | null;
+  /** Returned once, on create only: the student's login password, so the
+   * admin can pass it on (there is no email sending). */
+  temporaryPassword?: string;
+  loginUsername?: string;
+}
+
+export interface TeacherRow {
+  id: number;
+  fullName: string;
+  email: string;
+  subject: string | null;
+  /** Returned once, on create only, when the server generated the password. */
+  temporaryPassword?: string;
+  loginUsername?: string;
+}
+
+export interface AssignmentRow {
+  id: number;
+  teacherId: number;
+  teacherName: string;
+  subjectId: number;
+  subjectName: string;
+  classId: number;
+  className: string;
+}
+
+export interface RegisterSchoolBody {
+  schoolName: string;
+  town: string;
+  region: string;
+  contactName: string;
+  email: string;
+  password: string;
 }
 
 export interface GradingScale {
@@ -185,10 +226,12 @@ export interface AdminUserRow {
 export interface SchoolProfile {
   id: number;
   name: string;
+  town: string | null;
   region: string | null;
   address: string | null;
   email: string | null;
   phone: string | null;
+  demoSchool: boolean;
 }
 
 export const PROGRAMMES = ['SCIENCE', 'GENERAL ARTS', 'BUSINESS', 'VISUAL ARTS'] as const;
@@ -277,8 +320,38 @@ async function download(path: string, filename: string): Promise<void> {
 
 export async function login(username: string, password: string): Promise<AuthUser> {
   const { data } = await api.post<AuthResponse>('/auth/login', { username, password });
+  return storeAuth(data);
+}
+
+/** Public school signup: creates the school + its first admin, logs them in. */
+export async function registerSchool(body: RegisterSchoolBody): Promise<AuthUser> {
+  const { data } = await api.post<AuthResponse>('/auth/register-school', body);
+  return storeAuth(data);
+}
+
+function storeAuth(data: AuthResponse): AuthUser {
   localStorage.setItem(TOKEN_KEY, data.token);
-  const user: AuthUser = { name: data.name, role: data.role };
+  const user: AuthUser = {
+    name: data.name,
+    role: data.role,
+    schoolId: data.schoolId,
+    schoolName: data.schoolName,
+    demoSchool: data.demoSchool,
+  };
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  return user;
+}
+
+/** Who is logged in (school included) — for sessions stored before the upgrade. */
+export async function me(): Promise<AuthUser> {
+  const { data } = await api.get<AuthResponse>('/auth/me');
+  const user: AuthUser = {
+    name: data.name,
+    role: data.role,
+    schoolId: data.schoolId,
+    schoolName: data.schoolName,
+    demoSchool: data.demoSchool,
+  };
   localStorage.setItem(USER_KEY, JSON.stringify(user));
   return user;
 }
@@ -314,6 +387,16 @@ export const adminApi = {
     api.put<AdminStudent>(`/admin/students/${id}`, body).then((r) => r.data),
   deleteStudent: (id: number) => api.delete(`/admin/students/${id}`),
 
+  teachers: () => api.get<TeacherRow[]>('/admin/teachers').then((r) => r.data),
+  createTeacher: (body: { fullName: string; email: string; subject: string; password: string }) =>
+    api.post<TeacherRow>('/admin/teachers', body).then((r) => r.data),
+  deleteTeacher: (id: number) => api.delete(`/admin/teachers/${id}`),
+
+  assignments: () => api.get<AssignmentRow[]>('/admin/assignments').then((r) => r.data),
+  createAssignment: (body: { teacherId: number; subjectId: number; classId: number }) =>
+    api.post<AssignmentRow>('/admin/assignments', body).then((r) => r.data),
+  deleteAssignment: (id: number) => api.delete(`/admin/assignments/${id}`),
+
   gradingScales: () => api.get<GradingScale[]>('/admin/grading-scales').then((r) => r.data),
   createGradingScale: (body: { letter: string; minScore: number; maxScore: number; remark: string }) =>
     api.post<GradingScale>('/admin/grading-scales', body).then((r) => r.data),
@@ -322,7 +405,7 @@ export const adminApi = {
   deleteGradingScale: (id: number) => api.delete(`/admin/grading-scales/${id}`),
 
   school: () => api.get<SchoolProfile>('/admin/school').then((r) => r.data),
-  updateSchool: (body: { name: string; region: string | null; address: string | null; email: string | null; phone: string | null }) =>
+  updateSchool: (body: { name: string; town: string | null; region: string | null; address: string | null; email: string | null; phone: string | null }) =>
     api.put<SchoolProfile>('/admin/school', body).then((r) => r.data),
 };
 

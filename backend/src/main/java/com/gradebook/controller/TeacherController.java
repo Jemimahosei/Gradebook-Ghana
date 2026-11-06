@@ -79,6 +79,10 @@ public class TeacherController {
             return Map.of("isClassTeacher", false);
         }
         SchoolClass sc = classOpt.get();
+        if (sc.getSchool() != null && teacher.getSchool() != null
+                && !sc.getSchool().getId().equals(teacher.getSchool().getId())) {
+            return Map.of("isClassTeacher", false); // class belongs to another school
+        }
         String semester = props.semester();
         List<Student> students = studentRepo.findBySchoolClass(sc);
         List<Grade> grades = gradeRepo.findBySchoolClassAndSemester(sc, semester);
@@ -194,6 +198,10 @@ public class TeacherController {
         }
         SchoolClass sc = classRepo.findByClassTeacher(teacherOpt.get())
                 .orElseThrow(() -> new IllegalArgumentException("Not a class teacher"));
+        if (sc.getSchool() != null && teacherOpt.get().getSchool() != null
+                && !sc.getSchool().getId().equals(teacherOpt.get().getSchool().getId())) {
+            throw new IllegalArgumentException("Not a class teacher");
+        }
         List<Map<String, Object>> result = new ArrayList<>();
         for (RankingUtil.RankedEntry e : gradeService.classRankings(sc, props.semester())) {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -214,17 +222,23 @@ public class TeacherController {
                 .orElseThrow(() -> new IllegalArgumentException("Not a teacher"));
         SchoolClass sc = classRepo.findByClassTeacher(teacher)
                 .orElseThrow(() -> new IllegalArgumentException("Not a class teacher"));
+        if (sc.getSchool() != null && teacher.getSchool() != null
+                && !sc.getSchool().getId().equals(teacher.getSchool().getId())) {
+            throw new IllegalArgumentException("Not a class teacher");
+        }
         List<Grade> grades = gradeRepo.findBySchoolClassAndSemester(sc, props.semester());
         grades.forEach(g -> g.setPublished(true));
         gradeRepo.saveAll(grades);
         return Map.of("status", "published", "count", String.valueOf(grades.size()));
     }
 
-    // --- Subjects (for admin class/subject forms that need the list) ---
+    // --- Subjects in this teacher's school ---
     @GetMapping("/subjects")
-    public List<Map<String, Object>> listSubjects() {
+    public List<Map<String, Object>> listSubjects(Authentication auth) {
+        Teacher teacher = getTeacher(auth)
+                .orElseThrow(() -> new IllegalArgumentException("Not a teacher"));
         List<Map<String, Object>> result = new ArrayList<>();
-        for (Subject s : subjectRepo.findAll()) {
+        for (Subject s : subjectRepo.findBySchool(teacher.getSchool())) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", s.getId());
             m.put("name", s.getName());

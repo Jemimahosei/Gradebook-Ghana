@@ -58,12 +58,16 @@ public class StudentMeController {
     private Student resolveStudent(Authentication auth, Long studentIdParam) {
         boolean isAdmin = auth.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-        if (isAdmin && studentIdParam != null) {
-            return students.findById(studentIdParam)
-                    .orElseThrow(() -> new IllegalArgumentException("Student not found: " + studentIdParam));
-        }
         if (isAdmin) {
-            return students.findAll().stream().findFirst()
+            // An admin may only view students of their own school.
+            com.gradebook.model.School school = current.currentSchool(auth);
+            if (studentIdParam != null) {
+                return students.findById(studentIdParam)
+                        .filter(s -> current.sameSchool(current.schoolOfStudent(s), school))
+                        .orElseThrow(() -> new java.util.NoSuchElementException(
+                                "Student not found: " + studentIdParam));
+            }
+            return students.findBySchool(school).stream().findFirst()
                     .orElseThrow(() -> new IllegalArgumentException("No students found"));
         }
         Student me = current.currentStudent(auth);
@@ -85,6 +89,7 @@ public class StudentMeController {
     public Map<String, Object> dashboard(Authentication auth,
                                          @RequestParam(required = false) Long studentId) {
         Student student = resolveStudent(auth, studentId);
+        com.gradebook.model.School school = current.schoolOfStudent(student);
         String semester = props.semester();
         List<Grade> published = publishedGrades(student);
         Double overall = WaecGrading.average(published.stream().map(Grade::getScore).toList());
@@ -102,7 +107,7 @@ public class StudentMeController {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("subject", e.getKey());
             m.put("average", avg);
-            m.put("letter", avg == null ? null : current.letterFor(avg));
+            m.put("letter", avg == null ? null : current.letterFor(school, avg));
             subjectAverages.add(m);
         }
 
@@ -126,6 +131,7 @@ public class StudentMeController {
     public List<Map<String, Object>> results(Authentication auth,
                                              @RequestParam(required = false) Long studentId) {
         Student student = resolveStudent(auth, studentId);
+        com.gradebook.model.School school = current.schoolOfStudent(student);
         List<Map<String, Object>> rows = new ArrayList<>();
         for (Grade g : publishedGrades(student)) {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -133,8 +139,8 @@ public class StudentMeController {
             m.put("classScore", g.getClassScore());
             m.put("examScore", g.getExamScore());
             m.put("total", g.getScore());
-            m.put("letter", g.getScore() == null ? null : current.letterFor(g.getScore()));
-            m.put("remark", g.getScore() == null ? null : current.remarkFor(g.getScore()));
+            m.put("letter", g.getScore() == null ? null : current.letterFor(school, g.getScore()));
+            m.put("remark", g.getScore() == null ? null : current.remarkFor(school, g.getScore()));
             m.put("published", g.isPublished());
             rows.add(m);
         }
@@ -146,6 +152,7 @@ public class StudentMeController {
                                              @RequestParam(required = false, defaultValue = "pdf") String format,
                                              @RequestParam(required = false) Long studentId) throws Exception {
         Student student = resolveStudent(auth, studentId);
+        com.gradebook.model.School school = current.schoolOfStudent(student);
         String semester = props.semester();
         List<Grade> published = publishedGrades(student);
         if (published.isEmpty()) {
@@ -154,8 +161,8 @@ public class StudentMeController {
         List<ReportCardService.ResultRow> rows = published.stream().map(g ->
                 new ReportCardService.ResultRow(
                         g.getSubject().getName(), g.getClassScore(), g.getExamScore(), g.getScore(),
-                        g.getScore() == null ? null : current.letterFor(g.getScore()),
-                        g.getScore() == null ? null : current.remarkFor(g.getScore()))).toList();
+                        g.getScore() == null ? null : current.letterFor(school, g.getScore()),
+                        g.getScore() == null ? null : current.remarkFor(school, g.getScore()))).toList();
         Double overall = WaecGrading.average(published.stream().map(Grade::getScore).toList());
         Integer rank = gradeService.classRank(student.getId(), semester);
         int classSize = student.getSchoolClass() == null ? 0
@@ -163,9 +170,9 @@ public class StudentMeController {
         String filenameBase = "report-card-" + student.getIndexNumber();
 
         if ("pdf".equalsIgnoreCase(format)) {
-            byte[] pdf = reportCardService.toPdf(student, current.demoSchool().getName(),
+            byte[] pdf = reportCardService.toPdf(student, school.getName(),
                     student.getSchoolClass() == null ? "" : student.getSchoolClass().getName(),
-                    "Term 1, " + semester, rows, overall, rank, classSize);
+                    "Term 1, " + semester, rows, overall, rank, classSize, school.isDemo());
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION,
                             ContentDisposition.attachment().filename(filenameBase + ".pdf").build().toString())

@@ -18,6 +18,11 @@ public class GradingScale {
     @Column(nullable = false) private double maxScore;
     private String remark;
 
+    /** The school this scale row belongs to. Null only for pre-upgrade rows (backfilled on boot). */
+    @ManyToOne
+    @JoinColumn(name = "school_id")
+    private School school;
+
     public GradingScale() {
     }
 
@@ -33,11 +38,13 @@ public class GradingScale {
     public double getMinScore() { return minScore; }
     public double getMaxScore() { return maxScore; }
     public String getRemark() { return remark; }
+    public School getSchool() { return school; }
     public void setId(Long id) { this.id = id; }
     public void setLetter(String l) { this.letter = l; }
     public void setMinScore(double m) { this.minScore = m; }
     public void setMaxScore(double m) { this.maxScore = m; }
     public void setRemark(String r) { this.remark = r; }
+    public void setSchool(School s) { this.school = s; }
 
     /** True when the score falls in this band (boundaries inclusive). */
     public boolean contains(double score) {

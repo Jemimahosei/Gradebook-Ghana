@@ -10,9 +10,19 @@ const DEMO_ACCOUNTS = [
   { label: 'Student (Kwame Mensah)', username: '0050101001' },
 ] as const;
 
-export default function Login({ onLoggedIn }: { onLoggedIn: (user: AuthUser) => void }) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+export default function Login({
+  onLoggedIn,
+  onRegister,
+  onBack,
+  initialUsername,
+}: {
+  onLoggedIn: (user: AuthUser) => void;
+  onRegister: () => void;
+  onBack: () => void;
+  initialUsername?: string;
+}) {
+  const [username, setUsername] = useState(initialUsername ?? '');
+  const [password, setPassword] = useState(initialUsername ? 'demo123' : '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -39,7 +49,7 @@ export default function Login({ onLoggedIn }: { onLoggedIn: (user: AuthUser) => 
     <main className="login-page">
       <div className="login-card">
         <h1>Gradebook Ghana</h1>
-        <p className="muted">Demo Senior High School — Ashanti Region</p>
+        <p className="muted">Sign in to your school&rsquo;s gradebook.</p>
         <form onSubmit={handleSubmit} className="form-stack">
           <label className="field">
             <span>Email or index number</span>
@@ -92,6 +102,16 @@ export default function Login({ onLoggedIn }: { onLoggedIn: (user: AuthUser) => 
             Students log in with their index number; staff log in with email.
           </p>
         </section>
+        <p className="small" style={{ marginTop: '1rem' }}>
+          Your school isn&rsquo;t registered yet?{' '}
+          <button type="button" className="link-button" onClick={onRegister}>
+            Register your school — it&rsquo;s free
+          </button>{' '}
+          ·{' '}
+          <button type="button" className="link-button" onClick={onBack}>
+            Back to home
+          </button>
+        </p>
       </div>
     </main>
   );

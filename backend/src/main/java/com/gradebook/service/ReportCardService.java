@@ -17,7 +17,7 @@ import java.util.List;
  * Report-card exports (CSV + PDF via OpenPDF) from per-subject result rows.
  * Simple clean layout — school header, student bio, one row per subject
  * (Class 30% / Exam 70% / Total / Grade / Remark), overall average and
- * class rank. Demo data only.
+ * class rank. The "Demo data" footer line appears only for the demo school.
  */
 @Service
 public class ReportCardService {
@@ -54,7 +54,7 @@ public class ReportCardService {
 
     public byte[] toPdf(Student student, String schoolName, String className, String termSummary,
                         List<ResultRow> rows, Double overallAverage, Integer classRank,
-                        int classSize) throws Exception {
+                        int classSize, boolean demoSchool) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         Document doc = new Document();
         PdfWriter.getInstance(doc, out);
@@ -96,7 +96,11 @@ public class ReportCardService {
         }
         doc.add(table);
         doc.add(new Paragraph(" "));
-        doc.add(new Paragraph("Demo data — not a real school.", normal));
+        if (demoSchool) {
+            doc.add(new Paragraph("Demo data — not a real school.", normal));
+        } else {
+            doc.add(new Paragraph("Gradebook Ghana — free grading for Ghanaian senior high schools.", normal));
+        }
         doc.close();
         return out.toByteArray();
     }

@@ -15,14 +15,21 @@ public class SchoolClass {
     @JoinColumn(name = "class_teacher_id")
     private Teacher classTeacher;
 
+    /** The school this class belongs to. Null only for pre-upgrade rows (backfilled on boot). */
+    @ManyToOne
+    @JoinColumn(name = "school_id")
+    private School school;
+
     public Long getId() { return id; }
     public String getName() { return name; }
     public String getProgramme() { return programme; }
     public int getFormYear() { return formYear; }
     public Teacher getClassTeacher() { return classTeacher; }
+    public School getSchool() { return school; }
     public void setId(Long id) { this.id = id; }
     public void setName(String n) { this.name = n; }
     public void setProgramme(String p) { this.programme = p; }
     public void setFormYear(int y) { this.formYear = y; }
     public void setClassTeacher(Teacher t) { this.classTeacher = t; }
+    public void setSchool(School s) { this.school = s; }
 }

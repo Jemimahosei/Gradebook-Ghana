@@ -15,8 +15,18 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
 
-/** Shared helpers: resolve the logged-in user, the demo school, and grade letters. */
+/**
+ * Shared helpers: resolve the logged-in user, their school, and grade letters.
+ *
+ * Multi-tenancy rule (MVP): the school is resolved from the authenticated
+ * user in the database on every request — never from a JWT claim and never
+ * from a request parameter. A null school on a user row can only mean a
+ * pre-upgrade row that the startup backfill has not fixed yet; the
+ * schoolOf* helpers fall back to the user's class (students) and then to
+ * the demo school so those rows stay reachable.
+ */
 @Service
 public class CurrentUserService {
     private final TeacherRepository teachers;
@@ -50,20 +60,75 @@ public class CurrentUserService {
                 .orElseThrow(() -> new IllegalArgumentException("Logged-in admin not found"));
     }
 
-    /** The demo school: the first (and normally only) school in the database. */
+    // ---- school resolution ----
+
+    /** The school an admin manages (never null after backfill). */
+    public School schoolOfAdmin(Admin admin) {
+        if (admin.getSchool() != null) {
+            return admin.getSchool();
+        }
+        return demoSchool();
+    }
+
+    /** The school a teacher works for (never null after backfill). */
+    public School schoolOfTeacher(Teacher teacher) {
+        if (teacher.getSchool() != null) {
+            return teacher.getSchool();
+        }
+        return demoSchool();
+    }
+
+    /** A student's school: the student's own school, else their class's school. */
+    public School schoolOfStudent(Student student) {
+        if (student.getSchool() != null) {
+            return student.getSchool();
+        }
+        if (student.getSchoolClass() != null && student.getSchoolClass().getSchool() != null) {
+            return student.getSchoolClass().getSchool();
+        }
+        return demoSchool();
+    }
+
+    /** True when both schools are the same school (null-safe via schoolOf* fallbacks). */
+    public boolean sameSchool(School a, School b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        return Objects.equals(a.getId(), b.getId());
+    }
+
+    /** The school of the logged-in user, from their role. */
+    public School currentSchool(Authentication auth) {
+        boolean isAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        boolean isTeacher = auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_TEACHER"));
+        if (isAdmin) {
+            return schoolOfAdmin(currentAdmin(auth));
+        }
+        if (isTeacher) {
+            return schoolOfTeacher(currentTeacher(auth));
+        }
+        return schoolOfStudent(currentStudent(auth));
+    }
+
+    /** The seeded demo school (demo=true), falling back to the first school. */
     public School demoSchool() {
-        return schools.findAll().stream().findFirst()
+        return schools.findFirstByDemoTrue()
+                .or(() -> schools.findFirstByOrderByIdAsc())
                 .orElseThrow(() -> new IllegalStateException("No school configured"));
     }
 
-    /** Grading scale rows, highest band first. */
-    public List<GradingScale> scales() {
-        return scales.findAllByOrderByMinScoreDesc();
+    // ---- grading scale (school-scoped) ----
+
+    /** Grading scale rows for one school, highest band first. */
+    public List<GradingScale> scales(School school) {
+        return scales.findBySchoolOrderByMinScoreDesc(school);
     }
 
-    /** Letter for a total, from the admin-editable scale (WAEC fallback when the table is empty). */
-    public String letterFor(double total) {
-        List<GradingScale> rows = scales();
+    /** Letter for a total, from the school's admin-editable scale (WAEC fallback when empty). */
+    public String letterFor(School school, double total) {
+        List<GradingScale> rows = scales(school);
         if (rows.isEmpty()) {
             return WaecGrading.letter(total);
         }
@@ -71,8 +136,8 @@ public class CurrentUserService {
                 .findFirst().orElse(WaecGrading.letter(total));
     }
 
-    public String remarkFor(double total) {
-        List<GradingScale> rows = scales();
+    public String remarkFor(School school, double total) {
+        List<GradingScale> rows = scales(school);
         if (rows.isEmpty()) {
             return WaecGrading.remark(total);
         }

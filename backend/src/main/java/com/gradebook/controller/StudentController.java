@@ -4,7 +4,9 @@ import com.gradebook.model.SchoolClass;
 import com.gradebook.model.Student;
 import com.gradebook.repository.SchoolClassRepository;
 import com.gradebook.repository.StudentRepository;
+import com.gradebook.service.CurrentUserService;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,21 +26,27 @@ import java.util.Map;
 public class StudentController {
     private final StudentRepository repo;
     private final SchoolClassRepository classRepo;
+    private final CurrentUserService current;
 
-    public StudentController(StudentRepository repo, SchoolClassRepository classRepo) {
+    public StudentController(StudentRepository repo, SchoolClassRepository classRepo,
+                             CurrentUserService current) {
         this.repo = repo;
         this.classRepo = classRepo;
+        this.current = current;
     }
 
     @GetMapping
-    public List<Map<String, Object>> getAll() {
-        return repo.findAll().stream().map(this::toDto).toList();
+    public List<Map<String, Object>> getAll(Authentication auth) {
+        com.gradebook.model.School school = current.currentSchool(auth);
+        return repo.findBySchool(school).stream().map(this::toDto).toList();
     }
 
     @GetMapping("/by-class/{classId}")
-    public List<Map<String, Object>> getByClass(@PathVariable Long classId) {
+    public List<Map<String, Object>> getByClass(Authentication auth, @PathVariable Long classId) {
+        com.gradebook.model.School school = current.currentSchool(auth);
         SchoolClass sc = classRepo.findById(classId)
-                .orElseThrow(() -> new IllegalArgumentException("Class not found: " + classId));
+                .filter(c -> current.sameSchool(c.getSchool(), school))
+                .orElseThrow(() -> new java.util.NoSuchElementException("Class not found: " + classId));
         return repo.findBySchoolClass(sc).stream().map(this::toDto).toList();
     }
 

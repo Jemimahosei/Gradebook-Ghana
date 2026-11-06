@@ -2,6 +2,7 @@ package com.gradebook.service;
 
 import com.gradebook.model.Grade;
 import com.gradebook.model.ReportCard;
+import com.gradebook.model.School;
 import com.gradebook.model.SchoolClass;
 import com.gradebook.model.Student;
 import com.gradebook.model.Subject;
@@ -16,6 +17,8 @@ import com.gradebook.util.WaecGrading;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Objects;
 
 /**
  * Grade arithmetic and report cards. All pure maths lives in
@@ -41,7 +44,9 @@ public class GradeService {
         this.reportCardRepo = reportCardRepo;
     }
 
-    /** Create or update one student's grade in one subject (30/70 components). */
+    /** Create or update one student's grade in one subject (30/70 components).
+     * All three parties must belong to the same school — a teacher can only
+     * grade their own school's students in their own school's subjects. */
     public Grade enterGrade(Long studentId, Long subjectId, Teacher teacher,
                             Double classScore, Double examScore, String semester) {
         WaecGrading.validateScore(classScore, "classScore");
@@ -50,6 +55,9 @@ public class GradeService {
                 .orElseThrow(() -> new IllegalArgumentException("Student not found: " + studentId));
         Subject subject = subjectRepo.findById(subjectId)
                 .orElseThrow(() -> new IllegalArgumentException("Subject not found: " + subjectId));
+        if (!sameSchool(teacher, student, subject)) {
+            throw new NoSuchElementException("Student or subject not found in your school");
+        }
         Grade grade = gradeRepo.findByStudentAndSubjectAndSemester(student, subject, semester)
                 .orElseGet(Grade::new);
         grade.setStudent(student);
@@ -59,6 +67,20 @@ public class GradeService {
         grade.setExamScore(examScore);
         grade.setSemester(semester);
         return gradeRepo.save(grade);
+    }
+
+    /** True when teacher, student and subject all belong to the same school. */
+    private boolean sameSchool(Teacher teacher, Student student, Subject subject) {
+        Long teacherSchool = teacher.getSchool() == null ? null : teacher.getSchool().getId();
+        if (teacherSchool == null) {
+            return false; // cannot happen after the startup backfill
+        }
+        School studentSchool = student.getSchool() != null ? student.getSchool()
+                : (student.getSchoolClass() == null ? null : student.getSchoolClass().getSchool());
+        Long studentSchoolId = studentSchool == null ? null : studentSchool.getId();
+        Long subjectSchoolId = subject.getSchool() == null ? null : subject.getSchool().getId();
+        return Objects.equals(teacherSchool, studentSchoolId)
+                && Objects.equals(teacherSchool, subjectSchoolId);
     }
 
     /** A student's published grades (what the student dashboard shows). */

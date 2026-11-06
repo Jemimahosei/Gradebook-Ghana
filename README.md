@@ -5,6 +5,65 @@ teacher / student / admin portals. Built from the Mac app (Spring Boot + JWT +
 Create React App) with the §14 defects fixed and the from-scratch Admin +
 Student pages ported in. Spec: UI-SPEC.md (§13 acceptance bar, §14 defects) — kept with the project notes, not in this repo.
 
+## MVP upgrade (Nov 6, 2026) — real schools can sign up and use it
+
+The prototype is now a multi-school, free community tool, not a single-school
+demo. A logged-out visitor lands on a public landing page (what it is, what it
+does, how a school starts, demo accounts); a school registers at
+**Register your school** and gets its own isolated gradebook.
+
+- **Public landing page** (`/` when logged out): plain copy — free grading for
+  Ghanaian senior high schools, built by Jemimah Osei as a community project.
+  Features, 4-step start, "Register your school" + "Log in" + a "Try the demo"
+  section with the demo logins. No invented numbers, testimonials, or schools.
+- **School signup** (`POST /api/auth/register-school`, public): school name,
+  town, region, contact person name, email, password. Creates the School +
+  its first ADMIN (contact person), seeds the standard WAEC A1–F9 scale and
+  the 17-subject list, and logs the admin straight in.
+- **Multi-tenancy**: every school-scoped record (admins, teachers, classes,
+  subjects, students, grading scales) carries a `school_id`. All API queries
+  filter by the authenticated user's school (resolved from the user row on
+  each request — never from a JWT claim or a request parameter). Another
+  school's record reads as "not found" (404): lists, creates, updates,
+  deletes, grade saves, and student record views are all scoped. Grades and
+  report cards belong to a school through their student.
+- **Onboarding**: new schools start with the WAEC scale + subjects seeded.
+  The admin creates teachers (server-generated temporary password shown once
+  in the UI — no email sending), classes (class teacher is auto-assigned to
+  the class's subjects: core + programme), students (temporary password shown
+  once), and manages subject assignments on the Assignments tab. A
+  "Getting started" box on the empty admin dashboard walks through the order.
+- **App shell**: the header shows the logged-in user's own school name; the
+  footer says "demo only" only for the demo school (real schools get the
+  community-project line). Report-card PDFs carry the "Demo data" line only
+  for the demo school.
+- **Upgrade path for the live database** (Neon, currently demo-only data):
+  on first boot after deploy, `ddl-auto=update` adds the new nullable
+  columns (`school_id` on admins/teachers/classes/subjects/students/
+  grading_scales, `town` + `demo` on schools — no manual step, no downtime
+  beyond the deploy) and `SchoolBackfill` (runs before the seeder) assigns
+  every pre-upgrade row to Demo Senior High School (verified: 67 rows) and
+  marks it demo=true. It is idempotent — later boots are a no-op. Existing
+  demo logins and data survive untouched.
+- **Known MVP limits**: student index numbers are globally unique (not
+  per-school); teacher/admin emails are globally unique. The free Render
+  tier still sleeps when idle (~50s first load).
+
+New endpoints: `POST /api/auth/register-school`, `GET /api/auth/me`,
+`GET|POST|DELETE /api/admin/teachers`, `GET|POST|DELETE /api/admin/assignments`.
+New/changed files: `model/*` (school links), `SchoolBackfill.java`,
+`AuthService.java` (login school info + signup + seed defaults),
+`CurrentUserService.java` (school resolution + school-scoped scales),
+`AdminController.java` (scoped + teachers + assignments + temp passwords),
+`TeacherController` / `GradeController` / `StudentController` /
+`StudentMeController` (scoped), `AuthController.java`, `SecurityConfig.java`
+(only login + register-school are unauthenticated now),
+`ReportCardService.java` (demo footer flag), `frontend/src/pages/LandingPage.tsx`,
+`frontend/src/pages/RegisterPage.tsx`, `App.tsx`, `Login.tsx`,
+`AdminDashboard.tsx` (Teachers + Assignments tabs, getting-started box),
+`lib/api.ts`, `App.css` (landing styles), `backend/tools/verify-mvp.sh`
+(39-check MVP suite: signup → onboarding → publish → isolation).
+
 ## Demo accounts (password `demo123` for all)
 
 | Role | Login | Who |
@@ -111,8 +170,31 @@ For a restart-persistent H2 run, use a file URL instead of mem:
   saved before restart (70/80 → 77.0) was still there after restart, and
   the seeder did not duplicate data (32 students / 4 teachers unchanged).
 - **Frontend builds: yes** — `npm run build` → "Compiled successfully"
-  (98.93 kB JS gzip), zero warnings. Production build serves (index + bundle
+  (102.12 kB JS gzip), zero warnings. Production build serves (index + bundle
   both HTTP 200) with the correct title and API base URL.
+- **MVP suite: 39/39 checks pass** — `backend/tools/verify-mvp.sh` against the
+  running server: signup (token + school, duplicate email → 400, short
+  password → 400), new school starts empty with 17 subjects + 9 scale rows
+  seeded, `/auth/me` returns the school, teacher create (temp password) +
+  login, class create with auto-assignment of the class teacher to 8 subjects
+  (3 core + 5 science), student create (temp password) + login, teacher
+  my-class (1 student, 8 subjects), 30/70 total 87.0, publish, student
+  result (87.0, B2), report-card PDF (no "Demo data" line; demo PDF keeps
+  it), and cross-school isolation — school A sees only its own students /
+  classes / subjects / grades, teacher A grading a demo student → 404,
+  admin A deleting/editing/viewing demo records → 404, student A viewing
+  another student → 400, second school B starts empty, demo school intact
+  (32/4/4) and all three demo logins still work.
+- **Upgrade-path simulation: verified** — against a file H2 copy of the demo
+  database with every `school_id` nulled and `demo=false` (the pre-upgrade
+  state): first boot after the change ran `SchoolBackfill` and assigned all
+  67 pre-upgrade rows to Demo Senior High School (classes=4, admins=1,
+  teachers=4, subjects=17, scales=9, students=32), marked it demo=true, and
+  the server started cleanly; demo admin/teacher/student flows all worked
+  afterwards. A second restart printed no backfill line (idempotent) and the
+  data survived (32 students, 4 teachers, 4 classes, 17 subjects).
+- **Grading utilities: 61/61 checks pass** — `backend/verify/run-verify.sh`
+  (re-run after the MVP changes).
 - **§14 defects fixed**: TeacherDashboard rewritten (was the broken version
   that didn't compile) with 30/70 inputs, correct SHS WAEC bands, rankings
   tab, and error handling; login works for all 3 roles (the Oct 12
