@@ -3,7 +3,7 @@
 Demo Senior High School gradebook: WAEC A1–F9 grades, 30% class work + 70% exam,
 teacher / student / admin portals. Built from the Mac app (Spring Boot + JWT +
 Create React App) with the §14 defects fixed and the from-scratch Admin +
-Student pages ported in. Spec: `../UI-SPEC.md` (§13 acceptance bar, §14 defects).
+Student pages ported in. Spec: UI-SPEC.md (§13 acceptance bar, §14 defects) — kept with the project notes, not in this repo.
 
 ## Demo accounts (password `demo123` for all)
 
@@ -32,7 +32,7 @@ createdb gradebook_ghana
 #   psql -c "CREATE ROLE jemimahosei LOGIN PASSWORD '' SUPERUSER;"
 
 # 2. Backend (port 8080)
-cd prototype/backend
+cd backend
 mvn spring-boot:run
 # If your Postgres user/password differ from the defaults (jemimahosei / empty):
 #   SPRING_DATASOURCE_USERNAME=<user> SPRING_DATASOURCE_PASSWORD=<pass> mvn spring-boot:run
@@ -40,7 +40,7 @@ mvn spring-boot:run
 #   JWT_SECRET=<long random string, at least 32 bytes> mvn spring-boot:run
 
 # 3. Frontend (port 3000) — in a second terminal
-cd prototype/frontend
+cd frontend
 npm install
 npm start
 # If npm start fails with an OpenSSL error, retry with:
@@ -56,7 +56,7 @@ with curl instead. The tooling lives in `backend/tools/`:
 
 ```bash
 # 1. Fetch the full dependency closure (105 jars, ~65 MB) into /tmp/gradebook-m2
-cd prototype/backend/tools
+cd backend/tools
 python3 fetch-deps.py --extra com.h2database:h2:2.2.224 \
   org.junit.platform:junit-platform-console-standalone:1.10.2
 
@@ -65,11 +65,11 @@ export JAVA_HOME=~/tools/jdk-17
 export PATH=$JAVA_HOME/bin:$PATH
 cd ../..
 mkdir -p /tmp/gradebook-build/classes
-find src/main/java -name '*.java' > /tmp/gradebook-build/sources.txt
+find backend/src/main/java -name '*.java' > /tmp/gradebook-build/sources.txt
 javac -parameters -encoding UTF-8 \
   -cp "$(paste -sd: /tmp/gradebook-m2/classpath.txt)" \
   -d /tmp/gradebook-build/classes @/tmp/gradebook-build/sources.txt
-cp src/main/resources/application.properties /tmp/gradebook-build/classes/
+cp backend/src/main/resources/application.properties /tmp/gradebook-build/classes/
 
 # 3. Run against H2 (in-memory; NON_KEYWORDS=YEAR is required because the
 #    Student entity has an unquoted `year` column — legal in Postgres,
@@ -82,7 +82,7 @@ SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT=org.hibernate.dialect.H2Dialect \
 java -cp "$CP" com.gradebook.GradebookApplication
 
 # 4. Frontend
-cd prototype/frontend
+cd frontend
 npm install
 npm run build   # production build; or: npm start (dev server on :3000)
 ```
@@ -140,23 +140,21 @@ For a restart-persistent H2 run, use a file URL instead of mem:
 ## Layout
 
 ```
-prototype/
-  backend/    Spring Boot 3.2.5 / Java 17 / JWT / OpenPDF
-    src/main/java/com/gradebook/   (42 source files)
-    src/main/resources/application.properties
-    tools/fetch-deps.py           curl-based Maven dependency fetcher
-    tools/verify-api.sh           24-check end-to-end API suite
-    verify/run-verify.sh          61-check grading-util suite
-  frontend/   Create React App 5 / React 19 / axios / react-router-dom (unused)
-    src/lib/api.ts                JWT axios client + typed API
-    src/components.tsx            shared UI (ErrorBanner, Card, Field, …)
-    src/pages/Login.tsx           login + demo accounts
-    src/pages/TeacherDashboard.tsx  My Class (30/70 grid) / My Subjects / Rankings
-    src/pages/StudentDashboard.tsx  dashboard / results / PDF+CSV report card
-    src/pages/AdminDashboard.tsx    dashboard / classes / subjects / students /
-                                    grading scale / school profile / users
-    src/App.tsx  src/App.css  src/index.css   (#76B900 theme)
+backend/    Spring Boot 3.2.5 / Java 17 / JWT / OpenPDF
+  src/main/java/com/gradebook/   (42 source files)
+  src/main/resources/application.properties
+  tools/fetch-deps.py           curl-based Maven dependency fetcher
+  tools/verify-api.sh           24-check end-to-end API suite
+  verify/run-verify.sh          61-check grading-util suite
+frontend/   Create React App 5 / React 19 / axios / react-router-dom (unused)
+  src/lib/api.ts                JWT axios client + typed API
+  src/components.tsx            shared UI (ErrorBanner, Card, Field, …)
+  src/pages/Login.tsx           login + demo accounts
+  src/pages/TeacherDashboard.tsx  My Class (30/70 grid) / My Subjects / Rankings
+  src/pages/StudentDashboard.tsx  dashboard / results / PDF+CSV report card
+  src/pages/AdminDashboard.tsx    dashboard / classes / subjects / students /
+                                  grading scale / school profile / users
+  src/App.tsx  src/App.css  src/index.css   (#76B900 theme)
 ```
 
-Original trees are untouched: `../frontend/` + `../backend/` (from-scratch
-Basic-auth/Vite build) and `../mac-code/` (pristine Mac copy, 50 files).
+This repo holds the prototype only. The earlier from-scratch build (Basic-auth/Vite) and the pristine copy of the Mac code live outside this repo.
