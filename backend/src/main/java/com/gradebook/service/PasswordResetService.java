@@ -9,6 +9,7 @@ import com.gradebook.repository.PasswordResetTokenRepository;
 import com.gradebook.repository.TeacherRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -51,17 +52,22 @@ public class PasswordResetService {
     private final PasswordResetTokenRepository tokens;
     private final PasswordEncoder encoder;
     private final GradebookProperties props;
-    private final JavaMailSender mailSender;
+    // Optional on purpose: Spring Boot only creates a JavaMailSender bean
+    // when mail is configured. Requiring it here made the whole app fail
+    // to start in production, where no SMTP is configured — mail is a
+    // nice-to-have for this flow, never a boot dependency.
+    private final ObjectProvider<JavaMailSender> mailSenderProvider;
 
     public PasswordResetService(AdminRepository admins, TeacherRepository teachers,
                                 PasswordResetTokenRepository tokens, PasswordEncoder encoder,
-                                GradebookProperties props, JavaMailSender mailSender) {
+                                GradebookProperties props,
+                                ObjectProvider<JavaMailSender> mailSenderProvider) {
         this.admins = admins;
         this.teachers = teachers;
         this.tokens = tokens;
         this.encoder = encoder;
         this.props = props;
-        this.mailSender = mailSender;
+        this.mailSenderProvider = mailSenderProvider;
     }
 
     /**
@@ -130,7 +136,8 @@ public class PasswordResetService {
 
     private void deliver(String email, String token) {
         String link = props.frontendUrl() + "/reset-password?token=" + token;
-        if (props.mailConfigured()) {
+        JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
+        if (props.mailConfigured() && mailSender != null) {
             try {
                 SimpleMailMessage msg = new SimpleMailMessage();
                 msg.setFrom(props.mailFrom());
