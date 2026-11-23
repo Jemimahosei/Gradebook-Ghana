@@ -22,6 +22,7 @@ public class School {
     private String email;
     private String phone;
     /** True only for the seeded demo school. Demo data is fictional. */
+    @Column(columnDefinition = "boolean default false")
     private boolean demo = false;
 
     /**
