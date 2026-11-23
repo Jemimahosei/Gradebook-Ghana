@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { Logo } from '../components';
+import { changePassword } from '../lib/api';
+import { Logo, errorText } from '../components';
 
 /**
- * First log in: choose password — mockup screen 21. The backend has no
- * change-password endpoint and the login response carries no
- * "must change password" flag, so this screen is implemented with local
- * state only (see redesign notes): it validates and confirms exactly as
- * the mockup presents it, but cannot yet persist the new password.
+ * First log in: choose password — mockup screen 21. Shown when the
+ * login response flags the account with mustChangePassword (every
+ * admin-issued temporary password). Saving posts to
+ * POST /api/auth/change-password, which clears the flag server-side.
  */
 export default function ChoosePassword({
   name,
@@ -21,8 +21,9 @@ export default function ChoosePassword({
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     if (password.length < 8) {
       setError('Use at least 8 characters.');
@@ -32,7 +33,16 @@ export default function ChoosePassword({
       setError('The two passwords do not match.');
       return;
     }
-    onDone();
+    setError(null);
+    setBusy(true);
+    try {
+      await changePassword(password);
+      onDone();
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -73,8 +83,8 @@ export default function ChoosePassword({
             {error && (
               <p style={{ color: '#c0392b', fontSize: 14, margin: '0 0 12px' }}>{error}</p>
             )}
-            <button type="submit" className="btn block">
-              Save password and continue
+            <button type="submit" className="btn block" disabled={busy}>
+              {busy ? 'Saving…' : 'Save password and continue'}
             </button>
           </form>
         </div>

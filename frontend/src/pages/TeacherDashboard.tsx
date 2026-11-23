@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { teacherApi, weightedTotal } from '../lib/api';
+import { schoolContext, teacherApi, weightedTotal } from '../lib/api';
 import type { AuthUser, GradeRequest, MyClass, RankEntry, SubjectAssignment } from '../lib/api';
 import { EmptyState, ErrorBanner, GradeChip, Loading, PageHead, errorText, isUnauthorized } from '../components';
 import { bandStyle, classCode, gradeBand, isValidMark } from '../theme';
@@ -9,8 +9,9 @@ export type TeacherTab = 'dashboard' | 'marks' | 'myclass' | 'rankings';
 /**
  * Teacher portal — mockup screens 11, 12, 13, 16, 23.
  * Dashboard = subject cards; Marks = per subject+class entry grid with
- * live totals, grades, remarks and positions (30% class work + 70% exam,
- * WAEC bands); Rankings = class positions with CSV download. The My
+ * live totals, grades, remarks and positions (the school's class-work /
+ * exam weighting — 30/70 unless the admin changed it — fetched from
+ * /api/context); Rankings = class positions with CSV download. The My
  * Class tab keeps the class teacher's whole-class grid from the previous
  * version, restyled. The Term select mirrors the mockup; the semester
  * itself is owned by the server.
@@ -48,6 +49,7 @@ export default function TeacherDashboard({
 }) {
   const [classData, setClassData] = useState<MyClass | null>(null);
   const [mySubjects, setMySubjects] = useState<SubjectAssignment[]>([]);
+  const [classWeight, setClassWeight] = useState(30);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,9 +67,13 @@ export default function TeacherDashboard({
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([loadClass(), teacherApi.mySubjects().then(setMySubjects).catch(onFail)]).finally(
-      () => setLoading(false),
-    );
+    Promise.all([
+      loadClass(),
+      teacherApi.mySubjects().then(setMySubjects).catch(onFail),
+      schoolContext()
+        .then((ctx) => setClassWeight(ctx.classWeightPercent))
+        .catch(() => undefined), // totals fall back to the 30/70 default
+    ]).finally(() => setLoading(false));
   }, [loadClass, onFail]);
 
   if (loading) return <Loading />;
@@ -87,11 +93,11 @@ export default function TeacherDashboard({
         />
       )}
       {tab === 'marks' && (
-        <MarksPanel mySubjects={mySubjects} onFail={onFail} onTab={onTab} />
+        <MarksPanel mySubjects={mySubjects} onFail={onFail} onTab={onTab} classWeight={classWeight} />
       )}
       {tab === 'myclass' &&
         (isClassTeacher ? (
-          <MyClassGrid classData={classData!} onFail={onFail} reload={loadClass} />
+          <MyClassGrid classData={classData!} onFail={onFail} reload={loadClass} classWeight={classWeight} />
         ) : (
           <EmptyState
             title="You are not a class teacher"
@@ -263,10 +269,12 @@ function MarksPanel({
   mySubjects,
   onFail,
   onTab,
+  classWeight,
 }: {
   mySubjects: SubjectAssignment[];
   onFail: Fail;
   onTab: (t: TeacherTab) => void;
+  classWeight: number;
 }) {
   const [selectedKey, setSelectedKey] = useState<string>('');
   const [students, setStudents] = useState<{ id: number; fullName: string; indexNumber: string }[]>([]);
@@ -325,7 +333,7 @@ function MarksPanel({
   const totals = students.map((st) => {
     const cell = drafts[st.id] ?? emptyCell();
     if (!isValidMark(cell.classScore) || !isValidMark(cell.examScore)) return null;
-    return weightedTotal(numOrNull(cell.classScore), numOrNull(cell.examScore));
+    return weightedTotal(numOrNull(cell.classScore), numOrNull(cell.examScore), classWeight);
   });
   const have = totals.filter((t): t is number => t !== null);
   const hasBad = students.some((st) => {
@@ -587,10 +595,12 @@ function MyClassGrid({
   classData,
   onFail,
   reload,
+  classWeight,
 }: {
   classData: MyClass;
   onFail: Fail;
   reload: () => Promise<void>;
+  classWeight: number;
 }) {
   const [drafts, setDrafts] = useState<Drafts>({});
   const [saving, setSaving] = useState(false);
@@ -627,7 +637,7 @@ function MyClassGrid({
       .map((subj) => {
         const cell = drafts[studentId]?.[subj];
         if (!cell) return null;
-        return weightedTotal(numOrNull(cell.classScore), numOrNull(cell.examScore));
+        return weightedTotal(numOrNull(cell.classScore), numOrNull(cell.examScore), classWeight);
       })
       .filter((t): t is number => t !== null);
     if (totals.length === 0) return null;
@@ -688,7 +698,7 @@ function MyClassGrid({
       </PageHead>
       {notice && <p className="success-note">{notice}</p>}
       <p className="lede">
-        {classData.programme} · Semester {classData.semester}. Class work is 30%, exam is 70%.
+        {classData.programme} · Semester {classData.semester}. Class work is {classWeight}%, exam is {100 - classWeight}%.
         Totals and averages update as you type; save to persist.
       </p>
       {students.length === 0 ? (
@@ -702,7 +712,7 @@ function MyClassGrid({
               <span key={subj} style={{ flex: 2, textAlign: 'center' }}>
                 {subj}
                 <br />
-                <span style={{ fontWeight: 500 }}>CW 30% / Exam 70% · Total</span>
+                <span style={{ fontWeight: 500 }}>CW {classWeight}% / Exam {100 - classWeight}% · Total</span>
               </span>
             ))}
             <span style={{ flex: 0.8, textAlign: 'right' }}>Avg</span>
@@ -720,7 +730,7 @@ function MyClassGrid({
                 </span>
                 {subjects.map((subj) => {
                   const cell = drafts[st.id]?.[subj] ?? emptyCell();
-                  const total = weightedTotal(numOrNull(cell.classScore), numOrNull(cell.examScore));
+                  const total = weightedTotal(numOrNull(cell.classScore), numOrNull(cell.examScore), classWeight);
                   return (
                     <span key={subj} style={{ flex: 2, textAlign: 'center' }}>
                       <span style={{ display: 'inline-flex', gap: 6 }}>

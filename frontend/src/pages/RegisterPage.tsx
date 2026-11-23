@@ -3,7 +3,6 @@ import type { FormEvent } from 'react';
 import { registerSchool } from '../lib/api';
 import type { AuthUser } from '../lib/api';
 import { ErrorBanner, Logo, errorText } from '../components';
-import { SCHOOL_COLOURS, getStoredBrand, storeBrand, storeCrest, storeMotto } from '../theme';
 
 const REGIONS = [
   'Eastern',
@@ -27,30 +26,24 @@ const REGIONS = [
 const SCHOOL_TYPES = ['Senior high school', 'Junior high school', 'Primary school'] as const;
 
 /**
- * Register your school — mockup screen 02, including the school-colour
- * picker and the live preview aside. The API contract has no colour,
- * motto, crest or school-type fields, so those four are kept on this
- * device (localStorage) and applied as the app theme; name, town,
- * region, contact name, email and password go to the API as before.
+ * Register your school — mockup screen 02, with the live preview aside.
+ * (The mockup's school colour / motto / crest fields were dropped in the
+ * Nov 2026 follow-up: the app uses the one brand colour everywhere.)
+ * Name, town, region, contact name, email and password go to the API.
  */
 export default function RegisterPage({
   onRegistered,
   onLogin,
   onBack,
-  onBrand,
 }: {
   onRegistered: (user: AuthUser) => void;
   onLogin: () => void;
   onBack: () => void;
-  onBrand: (colour: string) => void;
 }) {
   const [schoolName, setSchoolName] = useState('');
   const [town, setTown] = useState('');
   const [region, setRegion] = useState<string>('Eastern');
   const [schoolType, setSchoolType] = useState<string>(SCHOOL_TYPES[0]);
-  const [colour, setColour] = useState<string>(getStoredBrand());
-  const [motto, setMotto] = useState('');
-  const [crest, setCrest] = useState(false);
   const [contactName, setContactName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -78,10 +71,6 @@ export default function RegisterPage({
         email: email.trim(),
         password,
       });
-      storeBrand(colour);
-      storeMotto(motto.trim());
-      storeCrest(crest);
-      onBrand(colour);
       onRegistered(user);
     } catch (err) {
       setError(errorText(err));
@@ -91,7 +80,7 @@ export default function RegisterPage({
   }
 
   return (
-    <div className="pub-wrap" style={{ ['--brand' as string]: colour }}>
+    <div className="pub-wrap">
       <header className="pub-header">
         <Logo onClick={onBack} />
         <button type="button" className="text-link" style={{ fontSize: 15 }} onClick={onLogin}>
@@ -109,7 +98,7 @@ export default function RegisterPage({
         >
           <h1 style={{ margin: '0 0 4px', fontSize: 28 }}>Register your school</h1>
           <p style={{ margin: '0 0 24px', color: '#5c6488' }}>
-            Takes about two minutes. Gradebook then looks like your school.
+            Takes about two minutes.
           </p>
 
           <div className="form-grid">
@@ -160,52 +149,6 @@ export default function RegisterPage({
                   <option key={t}>{t}</option>
                 ))}
               </select>
-            </div>
-          </div>
-
-          <div style={{ marginBottom: 24 }}>
-            <span className="label">School colour</span>
-            <div style={{ display: 'flex', gap: 12 }}>
-              {SCHOOL_COLOURS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  aria-label="School colour"
-                  className="swatch"
-                  onClick={() => setColour(c)}
-                  style={{
-                    background: c,
-                    boxShadow: `0 0 0 2px ${c === colour ? '#1d2347' : 'transparent'}`,
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="form-grid" style={{ marginBottom: 24 }}>
-            <div>
-              <span className="label">School motto</span>
-              <input
-                className="input"
-                value={motto}
-                onChange={(e) => setMotto(e.target.value)}
-                placeholder="Optional"
-              />
-            </div>
-            <div>
-              <span className="label">Crest or logo</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <button
-                  type="button"
-                  className="btn secondary"
-                  onClick={() => setCrest((v) => !v)}
-                >
-                  {crest ? 'Remove crest' : 'Upload an image'}
-                </button>
-                <span style={{ color: '#5c6488', fontSize: 14 }}>
-                  {crest ? 'Crest added' : 'PNG or JPG, square works best'}
-                </span>
-              </div>
             </div>
           </div>
 
@@ -265,7 +208,7 @@ export default function RegisterPage({
           <button
             type="submit"
             className="btn"
-            style={{ background: colour, padding: '13px 28px', fontSize: 16, minHeight: 0 }}
+            style={{ padding: '13px 28px', fontSize: 16, minHeight: 0 }}
             disabled={busy}
           >
             {busy ? 'Creating…' : 'Create my school'}
@@ -284,7 +227,7 @@ export default function RegisterPage({
               <div
                 style={{
                   flex: '0 0 62px',
-                  background: colour,
+                  background: 'var(--brand)',
                   display: 'flex',
                   justifyContent: 'center',
                   paddingTop: 14,
@@ -300,25 +243,10 @@ export default function RegisterPage({
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontWeight: 700,
-                    color: colour,
+                    color: 'var(--brand)',
                   }}
                 >
-                  {crest ? (
-                    <svg viewBox="0 0 40 40" width="26" height="26" aria-hidden="true">
-                      <path
-                        d="M20 3l15 5v11c0 9-6.5 15-15 18C11.5 34 5 28 5 19V8z"
-                        fill={colour}
-                      />
-                      <path
-                        d="M13 16h14M13 21h14M20 11v17"
-                        stroke="#fff"
-                        strokeWidth="2.2"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  ) : (
-                    initial
-                  )}
+                  {initial}
                 </div>
               </div>
               <div style={{ flex: 1, padding: 18, minWidth: 0 }}>
@@ -333,7 +261,7 @@ export default function RegisterPage({
                       overflow: 'hidden',
                     }}
                   >
-                    <div style={{ height: 46, background: colour }} />
+                    <div style={{ height: 46, background: 'var(--brand)' }} />
                     <div style={{ padding: '8px 10px', fontSize: 13, fontWeight: 600 }}>2 Arts 1</div>
                   </div>
                   <div
@@ -344,7 +272,7 @@ export default function RegisterPage({
                       overflow: 'hidden',
                     }}
                   >
-                    <div style={{ height: 46, background: colour, opacity: 0.7 }} />
+                    <div style={{ height: 46, background: 'var(--brand)', opacity: 0.7 }} />
                     <div style={{ padding: '8px 10px', fontSize: 13, fontWeight: 600 }}>
                       3 Science 4
                     </div>
@@ -354,7 +282,7 @@ export default function RegisterPage({
                   <span
                     style={{
                       display: 'inline-block',
-                      background: colour,
+                      background: 'var(--brand)',
                       color: '#fff',
                       borderRadius: 6,
                       padding: '7px 14px',
@@ -369,7 +297,7 @@ export default function RegisterPage({
             </div>
           </div>
           <p style={{ color: '#5c6488', fontSize: 14 }}>
-            Your teachers and students see this colour, name and crest.
+            Your teachers and students see this name when they log in.
           </p>
         </aside>
       </main>

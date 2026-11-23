@@ -10,9 +10,10 @@ import type {
   SchoolProfile,
   Subject,
   TeacherRow,
+  TermRow,
 } from '../lib/api';
 import { EmptyState, ErrorBanner, GradeChip, Loading, PageHead, errorText, isUnauthorized } from '../components';
-import { bandStyle, classCode, getStoredBrand, getStoredCrest, getStoredMotto, storeBrand, storeCrest, storeMotto, SCHOOL_COLOURS } from '../theme';
+import { bandStyle, classCode } from '../theme';
 
 export type AdminTab =
   | 'dashboard'
@@ -29,21 +30,18 @@ export type AdminTab =
  * Admin portal — mockup screens 04-10, 18-20, 25, 27-30.
  * Nav: Dashboard, Classes and subjects, Students, Teachers, Assignments,
  * Terms, Grading scale, School profile. All writes go through the admin
- * API. Two mockup features have no backend support and are local state,
- * marked in code: per-class result publishing (the real publish is the
- * teacher's) and Terms open/close.
+ * API, including per-class result publishing and Terms open/close
+ * (real backend endpoints since the Nov 2026 follow-up).
  */
 export default function AdminDashboard({
   tab,
   onTab,
   onSessionExpired,
-  onBrand,
   onLogout,
 }: {
   tab: AdminTab;
   onTab: (t: AdminTab) => void;
   onSessionExpired: () => void;
-  onBrand: (colour: string) => void;
   onLogout: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -64,9 +62,9 @@ export default function AdminDashboard({
       {tab === 'students' && <StudentsPanel onFail={onFail} />}
       {tab === 'teachers' && <TeachersPanel onFail={onFail} />}
       {tab === 'assignments' && <AssignmentsPanel onFail={onFail} />}
-      {tab === 'terms' && <TermsPanel />}
+      {tab === 'terms' && <TermsPanel onFail={onFail} />}
       {tab === 'scales' && <ScalesPanel onFail={onFail} />}
-      {tab === 'school' && <SchoolPanel onFail={onFail} onBrand={onBrand} />}
+      {tab === 'school' && <SchoolPanel onFail={onFail} />}
       {tab === 'more' && <MorePanel onTab={onTab} onLogout={onLogout} />}
     </div>
   );
@@ -248,23 +246,12 @@ function DashboardPanel({ onFail, onTab }: { onFail: Fail; onTab: (t: AdminTab) 
 
 // ------------------------------------------- classes and subjects (05)
 
-const PUBLISH_KEY = 'gg_published_classes';
-
-function getPublished(): Set<number> {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(PUBLISH_KEY) ?? '[]') as number[]);
-  } catch {
-    return new Set();
-  }
-}
-
 function ClassesSubjects({ onFail }: { onFail: Fail }) {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [teachers, setTeachers] = useState<TeacherRow[]>([]);
   const [counts, setCounts] = useState<Map<number, number>>(new Map());
   const [loading, setLoading] = useState(true);
-  const [published, setPublished] = useState<Set<number>>(getPublished);
   const [classFormOpen, setClassFormOpen] = useState(false);
   const [subjectFormOpen, setSubjectFormOpen] = useState(false);
   const [editingClass, setEditingClass] = useState<SchoolClass | null>(null);
@@ -299,17 +286,22 @@ function ClassesSubjects({ onFail }: { onFail: Fail }) {
 
   useEffect(refresh, [refresh]);
 
-  function togglePublish(id: number) {
-    // LOCAL STATE ONLY: the backend publishes per teacher (teacherApi.publish),
-    // there is no per-class admin publish endpoint. This mirrors the mockup
-    // screen 05 toggle on this device until the backend grows one.
-    setPublished((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      localStorage.setItem(PUBLISH_KEY, JSON.stringify(Array.from(next)));
-      return next;
-    });
+  async function togglePublish(c: SchoolClass) {
+    // Real endpoint: POST /admin/classes/{id}/publish. The server also
+    // enforces the switch on the student endpoints, so unpublished
+    // results are hidden even outside this page.
+    setNotice(null);
+    try {
+      const updated = await adminApi.setClassPublished(c.id, !c.resultsPublished);
+      setClasses((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+      setNotice(
+        updated.resultsPublished
+          ? `${updated.name} results are now visible to students.`
+          : `${updated.name} results are hidden from students.`,
+      );
+    } catch (err) {
+      onFail(err);
+    }
   }
 
   async function submitClass(e: FormEvent) {
@@ -460,7 +452,7 @@ function ClassesSubjects({ onFail }: { onFail: Fail }) {
                   <span style={{ flex: 1.6 }} />
                 </div>
                 {classes.map((c) => {
-                  const p = published.has(c.id);
+                  const p = c.resultsPublished;
                   return (
                     <div key={c.id} className="tbl-row">
                       <span style={{ flex: 2, minWidth: 0 }}>
@@ -497,7 +489,7 @@ function ClassesSubjects({ onFail }: { onFail: Fail }) {
                         <button
                           type="button"
                           className={p ? 'btn secondary' : 'btn'}
-                          onClick={() => togglePublish(c.id)}
+                          onClick={() => void togglePublish(c)}
                         >
                           {p ? 'Unpublish' : 'Publish results'}
                         </button>
@@ -508,7 +500,7 @@ function ClassesSubjects({ onFail }: { onFail: Fail }) {
               </div>
               <div className="m-cards">
                 {classes.map((c) => {
-                  const p = published.has(c.id);
+                  const p = c.resultsPublished;
                   return (
                     <div key={c.id} className="m-card">
                       <strong>{c.name}</strong>
@@ -518,7 +510,7 @@ function ClassesSubjects({ onFail }: { onFail: Fail }) {
                           {p ? 'Visible to students' : 'Hidden from students'}
                         </span>
                       </div>
-                      <button type="button" className={p ? 'btn secondary block' : 'btn block'} onClick={() => togglePublish(c.id)}>
+                      <button type="button" className={p ? 'btn secondary block' : 'btn block'} onClick={() => void togglePublish(c)}>
                         {p ? 'Unpublish' : 'Publish results'}
                       </button>
                     </div>
@@ -650,6 +642,8 @@ function StudentsPanel({ onFail }: { onFail: Fail }) {
   const [programme, setProgramme] = useState<string>('SCIENCE');
   const [year, setYear] = useState('1');
   const [classId, setClassId] = useState<number | ''>('');
+  const [guardianName, setGuardianName] = useState('');
+  const [guardianPhone, setGuardianPhone] = useState('');
 
   const refresh = useCallback(() => {
     setLoading(true);
@@ -667,6 +661,8 @@ function StudentsPanel({ onFail }: { onFail: Fail }) {
     setProgramme(r.programme);
     setYear(String(r.year));
     setClassId(r.classId ?? '');
+    setGuardianName(r.guardianName ?? '');
+    setGuardianPhone(r.guardianPhone ?? '');
     setFormOpen(true);
   }
 
@@ -677,6 +673,8 @@ function StudentsPanel({ onFail }: { onFail: Fail }) {
     setProgramme('SCIENCE');
     setYear('1');
     setClassId('');
+    setGuardianName('');
+    setGuardianPhone('');
   }
 
   async function submit(e: FormEvent) {
@@ -689,6 +687,8 @@ function StudentsPanel({ onFail }: { onFail: Fail }) {
         programme,
         year: Number(year),
         classId: classId === '' ? null : classId,
+        guardianName: guardianName.trim() || null,
+        guardianPhone: guardianPhone.trim() || null,
       };
       if (editing) {
         await adminApi.updateStudent(editing.id, body);
@@ -722,9 +722,17 @@ function StudentsPanel({ onFail }: { onFail: Fail }) {
     }
   }
 
-  function resetPassword() {
-    // No backend endpoint exists for admin password resets.
-    setNotice('Password reset is not supported by the server yet — there is no reset endpoint.');
+  async function resetPassword(r: AdminStudent) {
+    if (!window.confirm(`Reset ${r.fullName}'s password? They will get a new temporary password and must choose their own at the next login.`)) return;
+    setNotice(null);
+    try {
+      const res = await adminApi.resetStudentPassword(r.id);
+      setNotice(
+        `Password reset for ${r.fullName} — login: ${res.loginUsername ?? r.indexNumber} / new temporary password: ${res.temporaryPassword}. Share this with the student.`,
+      );
+    } catch (err) {
+      onFail(err);
+    }
   }
 
   async function importCsv(file: File) {
@@ -741,6 +749,8 @@ function StudentsPanel({ onFail }: { onFail: Fail }) {
         programme: col(['programme', 'program']),
         year: col(['year', 'form']),
         cls: col(['classname', 'class name', 'class']),
+        guardian: col(['guardianname', 'guardian name', 'guardian']),
+        guardianPhone: col(['guardianphone', 'guardian phone']),
       };
       if (ci.name < 0 || ci.index < 0) {
         setNotice('CSV needs at least "fullName" and "indexNumber" columns.');
@@ -758,6 +768,8 @@ function StudentsPanel({ onFail }: { onFail: Fail }) {
             programme: ci.programme >= 0 && cells[ci.programme] ? cells[ci.programme].toUpperCase() : 'SCIENCE',
             year: ci.year >= 0 && cells[ci.year] ? Number(cells[ci.year]) : 1,
             classId: ci.cls >= 0 ? (classByName.get((cells[ci.cls] ?? '').toLowerCase()) ?? null) : null,
+            guardianName: ci.guardian >= 0 && cells[ci.guardian] ? cells[ci.guardian] : null,
+            guardianPhone: ci.guardianPhone >= 0 && cells[ci.guardianPhone] ? cells[ci.guardianPhone] : null,
           });
           ok += 1;
         } catch {
@@ -845,6 +857,16 @@ function StudentsPanel({ onFail }: { onFail: Fail }) {
               </select>
             </div>
           </div>
+          <div className="form-grid">
+            <div>
+              <span className="label">Guardian name</span>
+              <input className="input" value={guardianName} onChange={(e) => setGuardianName(e.target.value)} placeholder="Optional" />
+            </div>
+            <div>
+              <span className="label">Guardian phone</span>
+              <input className="input" value={guardianPhone} onChange={(e) => setGuardianPhone(e.target.value)} placeholder="Optional" />
+            </div>
+          </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button type="submit" className="btn">{editing ? 'Save changes' : 'Create student'}</button>
             <button type="button" className="btn secondary" onClick={() => setFormOpen(false)}>Cancel</button>
@@ -904,11 +926,16 @@ function StudentsPanel({ onFail }: { onFail: Fail }) {
                   <strong>{r.fullName}</strong>
                 </div>
                 <div style={{ flex: 1.4 }}>{r.className ?? '—'}</div>
-                <div style={{ flex: 1.5 }}>—</div>
+                <div style={{ flex: 1.5 }}>
+                  {r.guardianName ?? '—'}
+                  {r.guardianPhone ? (
+                    <span style={{ display: 'block', fontSize: 13, color: '#5c6488' }}>{r.guardianPhone}</span>
+                  ) : null}
+                </div>
                 <div style={{ flex: 1.5 }}>
                   <button type="button" className="text-link" onClick={() => openEdit(r)}>Edit</button>
                   &nbsp;&nbsp;
-                  <button type="button" className="text-link" onClick={resetPassword}>Reset password</button>
+                  <button type="button" className="text-link" onClick={() => void resetPassword(r)}>Reset password</button>
                 </div>
               </div>
             ))}
@@ -921,9 +948,15 @@ function StudentsPanel({ onFail }: { onFail: Fail }) {
                   {r.indexNumber}
                   {r.className ? `, ${r.className}` : ''}
                 </div>
+                {r.guardianName && (
+                  <div className="small">
+                    Guardian: {r.guardianName}
+                    {r.guardianPhone ? ` · ${r.guardianPhone}` : ''}
+                  </div>
+                )}
                 <div style={{ marginTop: 6, display: 'flex', gap: 16 }}>
                   <button type="button" className="text-link" onClick={() => openEdit(r)}>Edit</button>
-                  <button type="button" className="text-link" onClick={resetPassword}>Reset password</button>
+                  <button type="button" className="text-link" onClick={() => void resetPassword(r)}>Reset password</button>
                 </div>
               </div>
             ))}
@@ -967,6 +1000,7 @@ function TeachersPanel({ onFail }: { onFail: Fail }) {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [made, setMade] = useState<TeacherRow | null>(null);
+  const [editingTeacher, setEditingTeacher] = useState<TeacherRow | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -1001,18 +1035,53 @@ function TeachersPanel({ onFail }: { onFail: Fail }) {
     e.preventDefault();
     setNotice(null);
     try {
-      const created = await adminApi.createTeacher({
-        fullName: fullName.trim(),
-        email: email.trim(),
-        subject: subject.trim(),
-        password: password.trim(),
-      });
-      setMade(created);
+      if (editingTeacher) {
+        await adminApi.updateTeacher(editingTeacher.id, {
+          fullName: fullName.trim(),
+          email: email.trim(),
+          subject: subject.trim(),
+        });
+        setNotice(`Teacher updated: ${fullName.trim()}.`);
+        setEditingTeacher(null);
+        setOpen(false);
+      } else {
+        const created = await adminApi.createTeacher({
+          fullName: fullName.trim(),
+          email: email.trim(),
+          subject: subject.trim(),
+          password: password.trim(),
+        });
+        setMade(created);
+      }
       setFullName('');
       setEmail('');
       setSubject('');
       setPassword('');
       refresh();
+    } catch (err) {
+      onFail(err);
+    }
+  }
+
+  function openEditTeacher(r: TeacherRow) {
+    setMade(null);
+    setNotice(null);
+    setEditingTeacher(r);
+    setFullName(r.fullName);
+    setEmail(r.email);
+    setSubject(r.subject ?? '');
+    setPassword('');
+    setOpen(true);
+  }
+
+  async function resetTeacher(r: TeacherRow) {
+    if (!window.confirm(`Reset ${r.fullName}'s password? They will get a new temporary password and must choose their own at the next login.`)) return;
+    setNotice(null);
+    try {
+      const res = await adminApi.resetTeacherPassword(r.id);
+      setNotice(
+        `Password reset for ${r.fullName} — login: ${res.loginUsername ?? r.email} / new temporary password: ${res.temporaryPassword}. Share this with the teacher.`,
+      );
     } catch (err) {
       onFail(err);
     }
@@ -1036,6 +1105,11 @@ function TeachersPanel({ onFail }: { onFail: Fail }) {
           className="btn"
           onClick={() => {
             setMade(null);
+            setEditingTeacher(null);
+            setFullName('');
+            setEmail('');
+            setSubject('');
+            setPassword('');
             setOpen(true);
           }}
         >
@@ -1069,13 +1143,15 @@ function TeachersPanel({ onFail }: { onFail: Fail }) {
                     <input className="input" value={subject} onChange={(e) => setSubject(e.target.value)} />
                   )}
                 </div>
-                <div style={{ flex: '1 1 200px' }}>
-                  <span className="label">Password (optional)</span>
-                  <input className="input" value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} placeholder="Blank = generated" />
-                </div>
+                {!editingTeacher && (
+                  <div style={{ flex: '1 1 200px' }}>
+                    <span className="label">Password (optional)</span>
+                    <input className="input" value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} placeholder="Blank = generated" />
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 10 }}>
-                  <button type="submit" className="btn">Create teacher</button>
-                  <button type="button" className="btn secondary" onClick={() => setOpen(false)}>Cancel</button>
+                  <button type="submit" className="btn">{editingTeacher ? 'Save changes' : 'Create teacher'}</button>
+                  <button type="button" className="btn secondary" onClick={() => { setOpen(false); setEditingTeacher(null); }}>Cancel</button>
                 </div>
               </div>
             </form>
@@ -1145,8 +1221,11 @@ function TeachersPanel({ onFail }: { onFail: Fail }) {
                       <span className="chip ok">Active</span>
                     </span>
                     <span style={{ flex: 1.6, display: 'flex', gap: 14, justifyContent: 'flex-end', alignItems: 'center' }}>
-                      <button type="button" className="text-link" onClick={() => setNotice('Editing a teacher is not supported by the server yet.')}>
+                      <button type="button" className="text-link" onClick={() => openEditTeacher(r)}>
                         Edit
+                      </button>
+                      <button type="button" className="text-link" onClick={() => void resetTeacher(r)}>
+                        Reset password
                       </button>
                       <button type="button" className="text-link danger" onClick={() => setConfirmId(r.id)}>
                         Remove
@@ -1187,8 +1266,11 @@ function TeachersPanel({ onFail }: { onFail: Fail }) {
                     <div className="small">{r.email}</div>
                     <div className="small">{teaches.get(r.id) ?? r.subject ?? ''}</div>
                     <div style={{ marginTop: 6, display: 'flex', gap: 16 }}>
-                      <button type="button" className="text-link" onClick={() => setNotice('Editing a teacher is not supported by the server yet.')}>
+                      <button type="button" className="text-link" onClick={() => openEditTeacher(r)}>
                         Edit
+                      </button>
+                      <button type="button" className="text-link" onClick={() => void resetTeacher(r)}>
+                        Reset password
                       </button>
                       <button type="button" className="text-link danger" onClick={() => setConfirmId(r.id)}>
                         Remove
@@ -1320,92 +1402,147 @@ function AssignmentsPanel({ onFail }: { onFail: Fail }) {
 }
 
 // ------------------------------------------------------------ terms (18)
-// LOCAL STATE ONLY: the backend has no terms endpoints and the semester
-// is server-owned. Open/close is kept in localStorage on this device.
+// Terms live in the backend (GET/POST /admin/terms, open/close
+// endpoints). The open term is the school's current semester: marks
+// are entered for it, and closing it locks mark entry server-side.
 
-interface TermState {
-  name: string;
-  dates: string;
-  status: 'open' | 'closed' | 'not-started';
-}
+function TermsPanel({ onFail }: { onFail: Fail }) {
+  const [terms, setTerms] = useState<TermRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [tName, setTName] = useState('');
+  const [tSemester, setTSemester] = useState('');
+  const [tDates, setTDates] = useState('');
 
-const TERMS_KEY = 'gg_terms';
-const DEFAULT_TERMS: TermState[] = [
-  { name: 'Term 1', dates: '8 September to 12 December', status: 'open' },
-  { name: 'Term 2', dates: '12 January to 27 March', status: 'not-started' },
-  { name: 'Term 3', dates: '27 April to 17 July', status: 'not-started' },
-];
+  const refresh = useCallback(() => {
+    setLoading(true);
+    adminApi
+      .terms()
+      .then(setTerms)
+      .catch(onFail)
+      .finally(() => setLoading(false));
+  }, [onFail]);
 
-function TermsPanel() {
-  const [terms, setTerms] = useState<TermState[]>(() => {
+  useEffect(refresh, [refresh]);
+
+  async function setOpen(t: TermRow, open: boolean) {
+    setNotice(null);
     try {
-      const raw = localStorage.getItem(TERMS_KEY);
-      if (raw) return JSON.parse(raw) as TermState[];
-    } catch {
-      /* fall through */
+      const updated = open ? await adminApi.openTerm(t.id) : await adminApi.closeTerm(t.id);
+      setTerms((prev) =>
+        prev.map((x) =>
+          x.id === updated.id ? updated : open ? { ...x, open: false } : x,
+        ),
+      );
+      setNotice(open ? `${updated.name} is open. Teachers can enter marks.` : `${updated.name} is closed. Marks are locked.`);
+    } catch (err) {
+      onFail(err);
     }
-    return DEFAULT_TERMS;
-  });
-
-  function setStatus(i: number, status: TermState['status']) {
-    setTerms((prev) => {
-      const next = prev.map((t, j) => (j === i ? { ...t, status } : t));
-      localStorage.setItem(TERMS_KEY, JSON.stringify(next));
-      return next;
-    });
   }
 
-  const closedTerms = terms.filter((t) => t.status === 'closed');
+  async function createTerm(e: FormEvent) {
+    e.preventDefault();
+    setNotice(null);
+    try {
+      await adminApi.createTerm({
+        name: tName.trim(),
+        semester: tSemester.trim(),
+        dates: tDates.trim() || null,
+      });
+      setTName('');
+      setTSemester('');
+      setTDates('');
+      setFormOpen(false);
+      setNotice('Term added. Open it when it starts.');
+      refresh();
+    } catch (err) {
+      onFail(err);
+    }
+  }
+
+  const closedTerms = terms.filter((t) => !t.open);
+  const anyOpen = terms.some((t) => t.open);
 
   return (
     <div>
-      <PageHead crumb="Administrator / Terms" title="Terms" />
+      <PageHead crumb="Administrator / Terms" title="Terms">
+        <button type="button" className="btn" onClick={() => setFormOpen((v) => !v)}>
+          Add term
+        </button>
+      </PageHead>
       <p className="lede">
         Teachers can enter and change marks only while a term is open. Close a term when marks
         are final. Results then appear in each student's history.
       </p>
-      <div className="tbl">
-        <div className="tbl-head">
-          <span style={{ flex: '2 1 160px' }}>Term</span>
-          <span style={{ flex: '1 1 140px' }}>Status</span>
-          <span style={{ flex: '2 1 220px' }} />
-        </div>
-        {terms.map((t, i) => (
-          <div key={t.name} className="tbl-row" style={{ flexWrap: 'wrap', padding: '14px 18px' }}>
-            <div style={{ flex: '2 1 160px' }}>
-              <strong>{t.name}</strong>
-              <div style={{ color: '#5c6488', fontSize: 13 }}>{t.dates}</div>
+      {notice && <p className="success-note">{notice}</p>}
+      {formOpen && (
+        <form onSubmit={createTerm} className="add-panel">
+          <div className="form-grid">
+            <div>
+              <span className="label">Term name</span>
+              <input className="input" value={tName} onChange={(e) => setTName(e.target.value)} required placeholder="e.g. Term 2" />
             </div>
-            <div style={{ flex: '1 1 140px' }}>
-              {t.status === 'open' && <span className="chip ok">Open</span>}
-              {t.status === 'closed' && <span className="chip neutral">Closed</span>}
-              {t.status === 'not-started' && <span className="chip neutral">Not started</span>}
+            <div>
+              <span className="label">Semester code</span>
+              <input className="input" value={tSemester} onChange={(e) => setTSemester(e.target.value)} required placeholder="e.g. 2025/2026-2" />
             </div>
-            <div style={{ flex: '2 1 220px', display: 'flex', justifyContent: 'flex-end' }}>
-              {t.status === 'open' && (
-                <button type="button" className="btn" onClick={() => setStatus(i, 'closed')}>
-                  Close term
-                </button>
-              )}
-              {t.status === 'closed' && (
-                <button type="button" className="btn secondary" onClick={() => setStatus(i, 'open')}>
-                  Reopen term
-                </button>
-              )}
-              {t.status === 'not-started' && (
-                <button type="button" className="btn secondary" onClick={() => setStatus(i, 'open')}>
-                  Start term
-                </button>
-              )}
+            <div>
+              <span className="label">Dates</span>
+              <input className="input" value={tDates} onChange={(e) => setTDates(e.target.value)} placeholder="e.g. 12 January to 27 March" />
             </div>
           </div>
-        ))}
-      </div>
-      {closedTerms.map((t) => (
-        <p key={t.name} className="notice-amber">
-          {t.name} is closed. Marks are locked and teachers can no longer edit them.
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button type="submit" className="btn">Add term</button>
+            <button type="button" className="btn secondary" onClick={() => setFormOpen(false)}>Cancel</button>
+          </div>
+        </form>
+      )}
+      {loading ? (
+        <Loading />
+      ) : (
+        <div className="tbl">
+          <div className="tbl-head">
+            <span style={{ flex: '2 1 160px' }}>Term</span>
+            <span style={{ flex: '1 1 140px' }}>Status</span>
+            <span style={{ flex: '2 1 220px' }} />
+          </div>
+          {terms.map((t) => (
+            <div key={t.id} className="tbl-row" style={{ flexWrap: 'wrap', padding: '14px 18px' }}>
+              <div style={{ flex: '2 1 160px' }}>
+                <strong>{t.name}</strong>
+                <div style={{ color: '#5c6488', fontSize: 13 }}>
+                  {t.dates ?? t.semester}
+                </div>
+              </div>
+              <div style={{ flex: '1 1 140px' }}>
+                {t.open ? (
+                  <span className="chip ok">Open</span>
+                ) : (
+                  <span className="chip neutral">{anyOpen ? 'Closed' : 'Not started'}</span>
+                )}
+              </div>
+              <div style={{ flex: '2 1 220px', display: 'flex', justifyContent: 'flex-end' }}>
+                {t.open ? (
+                  <button type="button" className="btn" onClick={() => void setOpen(t, false)}>
+                    Close term
+                  </button>
+                ) : (
+                  <button type="button" className="btn secondary" onClick={() => void setOpen(t, true)}>
+                    {anyOpen ? 'Reopen term' : 'Start term'}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {!anyOpen && closedTerms.length > 0 && (
+        <p className="notice-amber">
+          No term is open. Marks are locked and teachers can no longer edit them until a term is
+          opened.
         </p>
-      ))}
+      )}
     </div>
   );
 }
@@ -1423,15 +1560,43 @@ function ScalesPanel({ onFail }: { onFail: Fail }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [cwPct, setCwPct] = useState('30');
   const [examPct, setExamPct] = useState('70');
+  const [savingWeights, setSavingWeights] = useState(false);
 
   const refresh = useCallback(() => {
     setLoading(true);
-    adminApi
-      .gradingScales()
-      .then((r) => setRows([...r].sort((a, b) => b.minScore - a.minScore)))
+    Promise.all([
+      adminApi.gradingScales().then((r) => setRows([...r].sort((a, b) => b.minScore - a.minScore))),
+      adminApi.weights().then((w) => {
+        setCwPct(String(w.classWeightPercent));
+        setExamPct(String(w.examWeightPercent));
+      }),
+    ])
       .catch(onFail)
       .finally(() => setLoading(false));
   }, [onFail]);
+
+  async function saveWeights() {
+    const cw = Number(cwPct);
+    if (!Number.isInteger(cw) || cw < 0 || cw > 100) {
+      setNotice('Class work percent must be a whole number between 0 and 100.');
+      return;
+    }
+    setSavingWeights(true);
+    setNotice(null);
+    try {
+      const w = await adminApi.updateWeights(cw);
+      setCwPct(String(w.classWeightPercent));
+      setExamPct(String(w.examWeightPercent));
+      setNotice(
+        `Weighting saved: class work ${w.classWeightPercent}%, exam ${w.examWeightPercent}%.` +
+          (w.totalsUpdated ? ` ${w.totalsUpdated} existing totals were recalculated.` : ''),
+      );
+    } catch (err) {
+      onFail(err);
+    } finally {
+      setSavingWeights(false);
+    }
+  }
 
   useEffect(refresh, [refresh]);
 
@@ -1569,17 +1734,40 @@ function ScalesPanel({ onFail }: { onFail: Fail }) {
           <h2 style={{ margin: '0 0 14px', fontSize: 18 }}>How the total is worked out</h2>
           <span className="label">Class work counts for</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-            <input type="text" value={cwPct} onChange={(e) => setCwPct(e.target.value)} className="input num" style={{ width: 90 }} />
+            <input
+              type="text"
+              value={cwPct}
+              onChange={(e) => {
+                setCwPct(e.target.value);
+                const n = Number(e.target.value);
+                if (Number.isInteger(n) && n >= 0 && n <= 100) setExamPct(String(100 - n));
+              }}
+              className="input num"
+              style={{ width: 90 }}
+            />
             <span>percent</span>
           </div>
           <span className="label">Exam counts for</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input type="text" value={examPct} onChange={(e) => setExamPct(e.target.value)} className="input num" style={{ width: 90 }} />
+            <input
+              type="text"
+              value={examPct}
+              onChange={(e) => {
+                setExamPct(e.target.value);
+                const n = Number(e.target.value);
+                if (Number.isInteger(n) && n >= 0 && n <= 100) setCwPct(String(100 - n));
+              }}
+              className="input num"
+              style={{ width: 90 }}
+            />
             <span>percent</span>
           </div>
-          <p style={{ color: '#5c6488', fontSize: 14, margin: '14px 0 0' }}>
-            The two add up to 100 percent.
+          <p style={{ color: '#5c6488', fontSize: 14, margin: '14px 0' }}>
+            The two add up to 100 percent. Saving recalculates every total already entered.
           </p>
+          <button type="button" className="btn" onClick={() => void saveWeights()} disabled={savingWeights}>
+            {savingWeights ? 'Saving…' : 'Save weighting'}
+          </button>
         </div>
       </div>
     </div>
@@ -1588,18 +1776,15 @@ function ScalesPanel({ onFail }: { onFail: Fail }) {
 
 // ---------------------------------------------------- school profile (10)
 
-function SchoolPanel({ onFail, onBrand }: { onFail: Fail; onBrand: (c: string) => void }) {
+function SchoolPanel({ onFail }: { onFail: Fail }) {
   const [school, setSchool] = useState<SchoolProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
-  const [motto, setMotto] = useState(getStoredMotto());
   const [town, setTown] = useState('');
   const [region, setRegion] = useState('');
   const [address, setAddress] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [colour, setColour] = useState(getStoredBrand());
-  const [crest, setCrest] = useState(getStoredCrest());
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1631,11 +1816,6 @@ function SchoolPanel({ onFail, onBrand }: { onFail: Fail; onBrand: (c: string) =
         phone: phone.trim() || null,
       });
       setSchool(updated);
-      // Colour, motto and crest have no backend fields — kept on this device.
-      storeBrand(colour);
-      storeMotto(motto.trim());
-      storeCrest(crest);
-      onBrand(colour);
       setNotice('School profile updated.');
     } catch (err) {
       onFail(err);
@@ -1655,69 +1835,16 @@ function SchoolPanel({ onFail, onBrand }: { onFail: Fail; onBrand: (c: string) =
       {notice && <p className="success-note">{notice}</p>}
       <form id="school-form" onSubmit={submit}>
         <div className="card" style={{ padding: 26, maxWidth: 760 }}>
-          <div className="form-grid">
+          <div className="form-grid" style={{ marginBottom: 0 }}>
             <div style={{ flex: '1 1 280px' }}>
               <span className="label">School name</span>
               <input className="input" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
             <div style={{ flex: '1 1 280px' }}>
-              <span className="label">Motto</span>
-              <input className="input" value={motto} onChange={(e) => setMotto(e.target.value)} />
-            </div>
-          </div>
-          <div className="form-grid" style={{ marginBottom: 22 }}>
-            <div style={{ flex: '1 1 280px' }}>
               <span className="label">Town</span>
               <input className="input" value={town} onChange={(e) => setTown(e.target.value)} />
             </div>
-            <div style={{ flex: '1 1 280px' }}>
-              <span className="label">Crest or logo</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: '50%',
-                    background: '#eceef8',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flex: 'none',
-                  }}
-                >
-                  {crest && (
-                    <svg viewBox="0 0 40 40" width="32" height="32" aria-hidden="true">
-                      <path d="M20 3l15 5v11c0 9-6.5 15-15 18C11.5 34 5 28 5 19V8z" fill="var(--brand)" />
-                      <path d="M13 16h14M13 21h14M20 11v17" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
-                    </svg>
-                  )}
-                </span>
-                <button type="button" className="btn secondary" onClick={() => setCrest((v) => !v)}>
-                  {crest ? 'Remove crest' : 'Upload an image'}
-                </button>
-              </div>
-            </div>
           </div>
-          <span className="label">School colour</span>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
-            {SCHOOL_COLOURS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                aria-label="School colour"
-                className="swatch"
-                onClick={() => setColour(c)}
-                style={{
-                  background: c,
-                  boxShadow: `0 0 0 2px ${c === colour ? '#1d2347' : 'transparent'}`,
-                }}
-              />
-            ))}
-          </div>
-          <p style={{ color: '#5c6488', fontSize: 14, margin: 0 }}>
-            The menu, buttons and class cards for every teacher and student change to this
-            colour.
-          </p>
         </div>
         <div className="card" style={{ padding: 26, maxWidth: 760, marginTop: 18 }}>
           <div className="form-grid">

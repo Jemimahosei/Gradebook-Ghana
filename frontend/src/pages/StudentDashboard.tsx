@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { studentApi } from '../lib/api';
 import type { AuthUser, StudentDashboard as StudentDashboardData, StudentResult } from '../lib/api';
 import { EmptyState, ErrorBanner, GradeChip, Loading, PageHead, errorText, isUnauthorized } from '../components';
-import { getStoredMotto } from '../theme';
 
 export type StudentView = 'results' | 'report';
 
@@ -71,7 +70,6 @@ export default function StudentDashboard({
     (acc, r) => (r.total !== null && (acc === null || acc.total === null || r.total > acc.total) ? r : acc),
     null,
   );
-  const motto = getStoredMotto();
   const schoolName = user.schoolName ?? 'Gradebook Ghana';
 
   const resultsTable = (compact: boolean, hideMobile = false) => (
@@ -259,7 +257,6 @@ export default function StudentDashboard({
                 <div style={{ fontFamily: 'Fraunces, Georgia, serif', fontWeight: 600, fontSize: 24 }}>
                   {schoolName}
                 </div>
-                {motto && <div style={{ color: '#5c6488' }}>{motto}</div>}
               </div>
             </div>
             <div

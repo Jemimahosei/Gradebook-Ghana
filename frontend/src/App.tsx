@@ -13,10 +13,10 @@ import type { TeacherTab } from './pages/TeacherDashboard';
 import StudentDashboard from './pages/StudentDashboard';
 import type { StudentView } from './pages/StudentDashboard';
 import { ErrorBanner } from './components';
-import { getStoredBrand } from './theme';
+import { DEFAULT_BRAND } from './theme';
 import './App.css';
 
-type LoggedOutView = 'landing' | 'login' | 'register' | 'forgot' | 'choose';
+type LoggedOutView = 'landing' | 'login' | 'register' | 'forgot';
 
 const ADMIN_NAV: { key: AdminTab; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
@@ -53,7 +53,6 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null>(() => getStoredUser());
   const [view, setView] = useState<LoggedOutView>('landing');
   const [sessionNotice, setSessionNotice] = useState<string | null>(null);
-  const [brand, setBrand] = useState<string>(() => getStoredBrand());
   const [adminTab, setAdminTab] = useState<AdminTab>('dashboard');
   const [teacherTab, setTeacherTab] = useState<TeacherTab>('dashboard');
   const [studentView, setStudentView] = useState<StudentView>('results');
@@ -90,7 +89,7 @@ export default function App() {
     setView('landing');
   }
 
-  const brandStyle = { ['--brand' as string]: brand };
+  const brandStyle = { ['--brand' as string]: DEFAULT_BRAND };
 
   if (!user) {
     return (
@@ -122,19 +121,25 @@ export default function App() {
             }}
             onLogin={() => setView('login')}
             onBack={() => setView('landing')}
-            onBrand={setBrand}
           />
         )}
         {view === 'forgot' && (
           <ForgotPassword onBack={() => setView('landing')} onLogin={() => setView('login')} />
         )}
-        {view === 'choose' && (
-          <ChoosePassword
-            name="there"
-            onDone={() => setView('login')}
-            onBack={() => setView('landing')}
-          />
-        )}
+      </div>
+    );
+  }
+
+  // First login with a temporary password: the server flags the account
+  // and the user must choose their own password before anything else.
+  if (user.mustChangePassword) {
+    return (
+      <div style={brandStyle}>
+        <ChoosePassword
+          name={user.name}
+          onDone={() => setUser({ ...user, mustChangePassword: false })}
+          onBack={handleLogout}
+        />
       </div>
     );
   }
@@ -230,7 +235,6 @@ export default function App() {
               tab={adminTab}
               onTab={setAdminTab}
               onSessionExpired={handleSessionExpired}
-              onBrand={setBrand}
               onLogout={handleLogout}
             />
           )}

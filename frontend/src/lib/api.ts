@@ -25,6 +25,9 @@ export interface AuthUser {
   schoolId?: number | null;
   schoolName?: string | null;
   demoSchool?: boolean;
+  /** True while the account runs on a temporary password: App.tsx sends
+   * the user to the choose-password screen before anything else. */
+  mustChangePassword?: boolean;
 }
 
 export interface AuthResponse {
@@ -34,6 +37,7 @@ export interface AuthResponse {
   schoolId: number | null;
   schoolName: string | null;
   demoSchool: boolean;
+  mustChangePassword?: boolean;
 }
 
 /** One cell of the teacher's My Class grid: 30% class work + 70% exam. */
@@ -156,6 +160,8 @@ export interface SchoolClass {
   formYear: number;
   classTeacherId: number | null;
   classTeacherName: string | null;
+  /** Admin publish switch: students see this class's results only when true. */
+  resultsPublished: boolean;
 }
 
 export interface Subject {
@@ -173,10 +179,36 @@ export interface AdminStudent {
   year: number;
   classId: number | null;
   className: string | null;
-  /** Returned once, on create only: the student's login password, so the
-   * admin can pass it on (there is no email sending). */
+  guardianName: string | null;
+  guardianPhone: string | null;
+  /** Returned once, on create / password reset only: the student's login
+   * password, so the admin can pass it on (students have no email). */
   temporaryPassword?: string;
   loginUsername?: string;
+}
+
+export interface TermRow {
+  id: number;
+  name: string;
+  /** Semester code the term's grades carry, e.g. "2025/2026-1". */
+  semester: string;
+  dates: string | null;
+  open: boolean;
+}
+
+export interface SchoolWeights {
+  classWeightPercent: number;
+  examWeightPercent: number;
+  totalsUpdated?: number;
+}
+
+/** The logged-in user's school context: current term + mark weighting. */
+export interface SchoolContext {
+  semester: string;
+  termName: string | null;
+  termOpen: boolean;
+  classWeightPercent: number;
+  examWeightPercent: number;
 }
 
 export interface TeacherRow {
@@ -337,6 +369,7 @@ function storeAuth(data: AuthResponse): AuthUser {
     schoolId: data.schoolId,
     schoolName: data.schoolName,
     demoSchool: data.demoSchool,
+    mustChangePassword: data.mustChangePassword ?? false,
   };
   localStorage.setItem(USER_KEY, JSON.stringify(user));
   return user;
@@ -351,9 +384,36 @@ export async function me(): Promise<AuthUser> {
     schoolId: data.schoolId,
     schoolName: data.schoolName,
     demoSchool: data.demoSchool,
+    mustChangePassword: data.mustChangePassword ?? false,
   };
   localStorage.setItem(USER_KEY, JSON.stringify(user));
   return user;
+}
+
+/** Set a new password for the logged-in user; clears the must-change flag. */
+export async function changePassword(newPassword: string): Promise<void> {
+  await api.post('/auth/change-password', { newPassword });
+  const stored = getStoredUser();
+  if (stored) {
+    stored.mustChangePassword = false;
+    localStorage.setItem(USER_KEY, JSON.stringify(stored));
+  }
+}
+
+/** Start a password reset for an email account (always answers OK). */
+export async function forgotPassword(username: string): Promise<void> {
+  await api.post('/auth/forgot-password', { username });
+}
+
+/** Finish a password reset with the code from the reset email/link. */
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  await api.post('/auth/reset-password', { token, newPassword });
+}
+
+/** Current term + mark weighting for the logged-in user's school. */
+export async function schoolContext(): Promise<SchoolContext> {
+  const { data } = await api.get<SchoolContext>('/context');
+  return data;
 }
 
 export function logout(): void {
@@ -380,17 +440,38 @@ export const adminApi = {
     api.put<Subject>(`/admin/subjects/${id}`, body).then((r) => r.data),
   deleteSubject: (id: number) => api.delete(`/admin/subjects/${id}`),
 
+  setClassPublished: (id: number, published: boolean) =>
+    api.post<SchoolClass>(`/admin/classes/${id}/publish`, { published }).then((r) => r.data),
+
   students: () => api.get<AdminStudent[]>('/admin/students').then((r) => r.data),
-  createStudent: (body: { fullName: string; indexNumber: string; programme: string; year: number; classId: number | null }) =>
+  createStudent: (body: { fullName: string; indexNumber: string; programme: string; year: number; classId: number | null; guardianName: string | null; guardianPhone: string | null }) =>
     api.post<AdminStudent>('/admin/students', body).then((r) => r.data),
-  updateStudent: (id: number, body: { fullName: string; indexNumber: string; programme: string; year: number; classId: number | null }) =>
+  updateStudent: (id: number, body: { fullName: string; indexNumber: string; programme: string; year: number; classId: number | null; guardianName: string | null; guardianPhone: string | null }) =>
     api.put<AdminStudent>(`/admin/students/${id}`, body).then((r) => r.data),
   deleteStudent: (id: number) => api.delete(`/admin/students/${id}`),
+  resetStudentPassword: (id: number) =>
+    api.post<AdminStudent>(`/admin/students/${id}/reset-password`).then((r) => r.data),
 
   teachers: () => api.get<TeacherRow[]>('/admin/teachers').then((r) => r.data),
   createTeacher: (body: { fullName: string; email: string; subject: string; password: string }) =>
     api.post<TeacherRow>('/admin/teachers', body).then((r) => r.data),
+  updateTeacher: (id: number, body: { fullName: string; email: string; subject: string }) =>
+    api.put<TeacherRow>(`/admin/teachers/${id}`, body).then((r) => r.data),
+  resetTeacherPassword: (id: number) =>
+    api.post<TeacherRow>(`/admin/teachers/${id}/reset-password`).then((r) => r.data),
   deleteTeacher: (id: number) => api.delete(`/admin/teachers/${id}`),
+
+  terms: () => api.get<TermRow[]>('/admin/terms').then((r) => r.data),
+  createTerm: (body: { name: string; semester: string; dates: string | null }) =>
+    api.post<TermRow>('/admin/terms', body).then((r) => r.data),
+  updateTerm: (id: number, body: { name: string; dates: string | null }) =>
+    api.put<TermRow>(`/admin/terms/${id}`, body).then((r) => r.data),
+  openTerm: (id: number) => api.post<TermRow>(`/admin/terms/${id}/open`).then((r) => r.data),
+  closeTerm: (id: number) => api.post<TermRow>(`/admin/terms/${id}/close`).then((r) => r.data),
+
+  weights: () => api.get<SchoolWeights>('/admin/weights').then((r) => r.data),
+  updateWeights: (classWeightPercent: number) =>
+    api.put<SchoolWeights>('/admin/weights', { classWeightPercent }).then((r) => r.data),
 
   assignments: () => api.get<AssignmentRow[]>('/admin/assignments').then((r) => r.data),
   createAssignment: (body: { teacherId: number; subjectId: number; classId: number }) =>
@@ -434,11 +515,19 @@ export const studentApi = {
 
 // ------------------------------------------------------------ helpers
 
-/** Weighted total for the 30% class work + 70% exam split; null until both are present. */
-export function weightedTotal(classScore: number | null, examScore: number | null): number | null {
+/**
+ * Weighted total for the school's class-work/exam split (30/70 unless the
+ * school changed it — see GET /api/context); null until both are present.
+ */
+export function weightedTotal(
+  classScore: number | null,
+  examScore: number | null,
+  classWeightPercent = 30,
+): number | null {
   if (classScore === null || classScore === undefined || examScore === null || examScore === undefined)
     return null;
-  return Math.round((0.3 * classScore + 0.7 * examScore) * 100) / 100;
+  const cw = classWeightPercent / 100;
+  return Math.round((cw * classScore + (1 - cw) * examScore) * 100) / 100;
 }
 
 export function formatAverage(value: number | null | undefined): string {

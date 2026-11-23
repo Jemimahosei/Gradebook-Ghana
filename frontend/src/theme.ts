@@ -1,54 +1,13 @@
 /**
  * Design tokens from the Gradebook Ghana mockups (Nov 2026 redesign).
  *
- * The mockups are built around a per-school brand colour: every screen
- * sets `--brand` and derives buttons, the side rail, class-card bands and
- * focus rings from it. The default is the indigo used throughout the
- * mockups; a school can pick another colour at registration / in the
- * school profile. The backend has no colour field, so the choice is kept
- * in localStorage on this device (see gradebook-redesign notes).
+ * The mockups derive buttons, the side rail, class-card bands and focus
+ * rings from a single `--brand` colour. The per-school colour picker
+ * from the first redesign pass was dropped (Nov 2026 follow-up): the
+ * app uses the mockups' indigo everywhere.
  */
 
-export const SCHOOL_COLOURS = [
-  '#3647c9',
-  '#0e7c86',
-  '#8a2f4b',
-  '#c2570c',
-  '#2f6b3b',
-  '#5b3a9d',
-] as const;
-
 export const DEFAULT_BRAND = '#3647c9';
-
-const BRAND_KEY = 'gg_brand';
-const MOTTO_KEY = 'gg_motto';
-const CREST_KEY = 'gg_crest';
-
-export function getStoredBrand(): string {
-  const v = localStorage.getItem(BRAND_KEY);
-  return v && (SCHOOL_COLOURS as readonly string[]).includes(v) ? v : DEFAULT_BRAND;
-}
-
-export function storeBrand(colour: string): void {
-  localStorage.setItem(BRAND_KEY, colour);
-}
-
-export function getStoredMotto(): string {
-  return localStorage.getItem(MOTTO_KEY) ?? '';
-}
-
-export function storeMotto(motto: string): void {
-  if (motto) localStorage.setItem(MOTTO_KEY, motto);
-  else localStorage.removeItem(MOTTO_KEY);
-}
-
-export function getStoredCrest(): boolean {
-  return localStorage.getItem(CREST_KEY) === '1';
-}
-
-export function storeCrest(on: boolean): void {
-  localStorage.setItem(CREST_KEY, on ? '1' : '0');
-}
 
 /** WAEC band for a total, with the remark and chip colour from the mockups. */
 export function gradeBand(total: number): { letter: string; remark: string; bg: string } {
