@@ -1,6 +1,9 @@
-/* Minimal reset — all app styling lives in App.css (green #76B900 + white). */
+/* Base reset — all app styling lives in App.css (Gradebook Ghana mockup design). */
 body {
   margin: 0;
+  font-family: Figtree, system-ui, sans-serif;
+  background: #f4f5fa;
+  color: #1d2347;
 }
 
 #root {

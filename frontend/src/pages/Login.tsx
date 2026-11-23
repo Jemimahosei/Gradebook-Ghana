@@ -2,23 +2,31 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { login } from '../lib/api';
 import type { AuthUser } from '../lib/api';
-import { ErrorBanner, errorText } from '../components';
+import { ErrorBanner, Logo, errorText } from '../components';
 
 const DEMO_ACCOUNTS = [
-  { label: 'Admin', username: 'admin@demo' },
-  { label: 'Teacher (Mrs. Asante)', username: 'teacher@demo' },
-  { label: 'Student (Kwame Mensah)', username: '0050101001' },
+  { label: 'Open as Admin', username: 'admin@demo' },
+  { label: 'Open as Teacher', username: 'teacher@demo' },
+  { label: 'Open as Student', username: '0050101001' },
 ] as const;
 
+/**
+ * Log in — mockup screen 03 ("Log in and demo preview"): form card on the
+ * left, demo-school panel on the right. Demo buttons sign straight in
+ * with the seeded demo accounts (password demo123), as the mockup's
+ * "Open as …" links imply.
+ */
 export default function Login({
   onLoggedIn,
   onRegister,
   onBack,
+  onForgot,
   initialUsername,
 }: {
   onLoggedIn: (user: AuthUser) => void;
   onRegister: () => void;
   onBack: () => void;
+  onForgot: () => void;
   initialUsername?: string;
 }) {
   const [username, setUsername] = useState(initialUsername ?? '');
@@ -26,12 +34,11 @@ export default function Login({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function doLogin(u: string, p: string) {
     setError(null);
     setBusy(true);
     try {
-      const user = await login(username.trim(), password);
+      const user = await login(u.trim(), p);
       onLoggedIn(user);
     } catch (err) {
       setError(errorText(err));
@@ -40,79 +47,91 @@ export default function Login({
     }
   }
 
-  function fillDemo(usernameValue: string) {
-    setUsername(usernameValue);
-    setPassword('demo123');
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    void doLogin(username, password);
   }
 
   return (
-    <main className="login-page">
-      <div className="login-card">
-        <h1>Gradebook Ghana</h1>
-        <p className="muted">Sign in to your school&rsquo;s gradebook.</p>
-        <form onSubmit={handleSubmit} className="form-stack">
-          <label className="field">
-            <span>Email or index number</span>
-            <input
-              type="text"
-              autoComplete="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              placeholder="admin@demo / teacher@demo / 0050101001"
-            />
-          </label>
-          <label className="field">
-            <span>Password</span>
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </label>
-          <ErrorBanner error={error} />
-          <button type="submit" className="btn-primary" disabled={busy}>
-            {busy ? 'Signing in…' : 'Sign in'}
+    <div className="pub-wrap">
+      <header className="pub-header">
+        <Logo onClick={onBack} />
+      </header>
+      <main
+        style={{
+          maxWidth: 900,
+          margin: '0 auto',
+          padding: '16px 32px 56px',
+          display: 'flex',
+          gap: 28,
+          flexWrap: 'wrap',
+          alignItems: 'flex-start',
+        }}
+        className="pub-main"
+      >
+        <form
+          onSubmit={handleSubmit}
+          className="card card-pad"
+          style={{ flex: '1 1 380px', minWidth: 0 }}
+        >
+          <h1 style={{ margin: '0 0 20px', fontSize: 28 }}>Log in</h1>
+          <span className="label">Email or index number</span>
+          <input
+            type="text"
+            autoComplete="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+            className="input"
+            style={{ marginBottom: 16 }}
+          />
+          <span className="label">Password</span>
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className="input"
+            style={{ marginBottom: 8 }}
+          />
+          <button type="button" className="text-link" style={{ fontSize: 14 }} onClick={onForgot}>
+            Forgot password
           </button>
+          <ErrorBanner error={error} />
+          <div style={{ marginTop: 22 }}>
+            <button type="submit" className="btn block" style={{ padding: 13 }} disabled={busy}>
+              {busy ? 'Logging in…' : 'Log in'}
+            </button>
+          </div>
+          <p style={{ margin: '16px 0 0', color: '#5c6488', fontSize: 14 }}>
+            New school?{' '}
+            <button type="button" className="text-link" onClick={onRegister}>
+              Register your school
+            </button>
+          </p>
         </form>
 
-        <section className="demo-box" aria-label="Demo credentials">
-          <h2>Demo accounts — demo only</h2>
-          <p>
-            Password for all demo accounts: <code>demo123</code>
+        <div className="card" style={{ flex: '1 1 300px', minWidth: 0, padding: 26 }}>
+          <h2 style={{ margin: '0 0 6px', fontSize: 20 }}>Try the demo school</h2>
+          <p style={{ margin: '0 0 18px', color: '#5c6488' }}>
+            Look around with example data. Nothing here is a real school.
           </p>
-          <ul>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {DEMO_ACCOUNTS.map((a) => (
-              <li key={a.username}>
-                <button
-                  type="button"
-                  className="link-button"
-                  onClick={() => fillDemo(a.username)}
-                  title="Fill in this demo account"
-                >
-                  {a.label}: {a.username}
-                </button>
-              </li>
+              <button
+                key={a.username}
+                type="button"
+                className="btn secondary"
+                disabled={busy}
+                onClick={() => void doLogin(a.username, 'demo123')}
+              >
+                {a.label}
+              </button>
             ))}
-          </ul>
-          <p className="small">
-            These are seeded demo credentials, not real accounts. Do not reuse real passwords here.
-            Students log in with their index number; staff log in with email.
-          </p>
-        </section>
-        <p className="small" style={{ marginTop: '1rem' }}>
-          Your school isn&rsquo;t registered yet?{' '}
-          <button type="button" className="link-button" onClick={onRegister}>
-            Register your school — it&rsquo;s free
-          </button>{' '}
-          ·{' '}
-          <button type="button" className="link-button" onClick={onBack}>
-            Back to home
-          </button>
-        </p>
-      </div>
-    </main>
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }
