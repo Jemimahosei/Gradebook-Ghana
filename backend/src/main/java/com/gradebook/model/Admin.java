@@ -17,6 +17,8 @@ public class Admin {
     @Column(unique = true, nullable = false) private String email;
     @Column(nullable = false) private String password; // BCrypt hash
     private String role = "ADMIN";
+    /** True while on a temporary password — see Student.mustChangePassword. */
+    private boolean mustChangePassword = false;
 
     /** The school this admin manages. Null only for pre-upgrade rows (backfilled on boot). */
     @ManyToOne
@@ -28,11 +30,13 @@ public class Admin {
     public String getEmail() { return email; }
     public String getPassword() { return password; }
     public String getRole() { return role; }
+    public boolean isMustChangePassword() { return mustChangePassword; }
     public School getSchool() { return school; }
     public void setId(Long id) { this.id = id; }
     public void setFullName(String n) { this.fullName = n; }
     public void setEmail(String e) { this.email = e; }
     public void setPassword(String p) { this.password = p; }
     public void setRole(String r) { this.role = r; }
+    public void setMustChangePassword(boolean m) { this.mustChangePassword = m; }
     public void setSchool(School s) { this.school = s; }
 }

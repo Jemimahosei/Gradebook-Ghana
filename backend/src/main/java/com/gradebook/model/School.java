@@ -24,6 +24,15 @@ public class School {
     /** True only for the seeded demo school. Demo data is fictional. */
     private boolean demo = false;
 
+    /**
+     * How much class work counts toward the total, as a whole percent
+     * (the exam counts for the rest: 100 − this). Per-school setting,
+     * edited by the admin on the grading-scale page; the WAEC-standard
+     * default is 30 (exam 70). Used by GradeService when a total is
+     * (re)computed.
+     */
+    private int classWeightPercent = 30;
+
     public School() {
     }
 
@@ -40,6 +49,8 @@ public class School {
     public String getEmail() { return email; }
     public String getPhone() { return phone; }
     public boolean isDemo() { return demo; }
+    public int getClassWeightPercent() { return classWeightPercent; }
+    public int getExamWeightPercent() { return 100 - classWeightPercent; }
     public void setId(Long id) { this.id = id; }
     public void setName(String n) { this.name = n; }
     public void setTown(String t) { this.town = t; }
@@ -48,4 +59,5 @@ public class School {
     public void setEmail(String e) { this.email = e; }
     public void setPhone(String p) { this.phone = p; }
     public void setDemo(boolean d) { this.demo = d; }
+    public void setClassWeightPercent(int p) { this.classWeightPercent = p; }
 }

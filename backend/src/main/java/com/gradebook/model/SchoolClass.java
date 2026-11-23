@@ -15,6 +15,14 @@ public class SchoolClass {
     @JoinColumn(name = "class_teacher_id")
     private Teacher classTeacher;
 
+    /**
+     * Admin-controlled per-class publish switch: students only see this
+     * class's results when it is true (in addition to the per-grade
+     * published flag set by the teacher publish). Defaults to hidden —
+     * the admin publishes when the term's results are ready.
+     */
+    private boolean resultsPublished = false;
+
     /** The school this class belongs to. Null only for pre-upgrade rows (backfilled on boot). */
     @ManyToOne
     @JoinColumn(name = "school_id")
@@ -25,11 +33,13 @@ public class SchoolClass {
     public String getProgramme() { return programme; }
     public int getFormYear() { return formYear; }
     public Teacher getClassTeacher() { return classTeacher; }
+    public boolean isResultsPublished() { return resultsPublished; }
     public School getSchool() { return school; }
     public void setId(Long id) { this.id = id; }
     public void setName(String n) { this.name = n; }
     public void setProgramme(String p) { this.programme = p; }
     public void setFormYear(int y) { this.formYear = y; }
     public void setClassTeacher(Teacher t) { this.classTeacher = t; }
+    public void setResultsPublished(boolean p) { this.resultsPublished = p; }
     public void setSchool(School s) { this.school = s; }
 }

@@ -8,6 +8,7 @@ import com.gradebook.repository.StudentRepository;
 import com.gradebook.service.CurrentUserService;
 import com.gradebook.service.GradeService;
 import com.gradebook.service.ReportCardService;
+import com.gradebook.service.TermService;
 import com.gradebook.util.WaecGrading;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -42,16 +43,19 @@ public class StudentMeController {
     private final GradeRepository grades;
     private final GradeService gradeService;
     private final ReportCardService reportCardService;
+    private final TermService termService;
     private final GradebookProperties props;
 
     public StudentMeController(CurrentUserService current, StudentRepository students,
                                GradeRepository grades, GradeService gradeService,
-                               ReportCardService reportCardService, GradebookProperties props) {
+                               ReportCardService reportCardService, TermService termService,
+                               GradebookProperties props) {
         this.current = current;
         this.students = students;
         this.grades = grades;
         this.gradeService = gradeService;
         this.reportCardService = reportCardService;
+        this.termService = termService;
         this.props = props;
     }
 
@@ -78,7 +82,13 @@ public class StudentMeController {
     }
 
     private List<Grade> publishedGrades(Student student) {
-        String semester = props.semester();
+        // Server-side publish gate: a grade must be published by the
+        // teacher AND its class published by the admin. An unpublished
+        // (or missing) class shows the student nothing at all.
+        if (student.getSchoolClass() == null || !student.getSchoolClass().isResultsPublished()) {
+            return List.of();
+        }
+        String semester = termService.currentSemester(current.schoolOfStudent(student));
         return gradeService.getPublishedGrades(student.getId()).stream()
                 .filter(g -> semester.equals(g.getSemester()))
                 .sorted(Comparator.comparing(g -> g.getSubject().getName()))
@@ -90,7 +100,7 @@ public class StudentMeController {
                                          @RequestParam(required = false) Long studentId) {
         Student student = resolveStudent(auth, studentId);
         com.gradebook.model.School school = current.schoolOfStudent(student);
-        String semester = props.semester();
+        String semester = termService.currentSemester(school);
         List<Grade> published = publishedGrades(student);
         Double overall = WaecGrading.average(published.stream().map(Grade::getScore).toList());
         Integer rank = gradeService.classRank(student.getId(), semester);
@@ -153,7 +163,7 @@ public class StudentMeController {
                                              @RequestParam(required = false) Long studentId) throws Exception {
         Student student = resolveStudent(auth, studentId);
         com.gradebook.model.School school = current.schoolOfStudent(student);
-        String semester = props.semester();
+        String semester = termService.currentSemester(school);
         List<Grade> published = publishedGrades(student);
         if (published.isEmpty()) {
             throw new IllegalArgumentException("No published grades yet for this student");

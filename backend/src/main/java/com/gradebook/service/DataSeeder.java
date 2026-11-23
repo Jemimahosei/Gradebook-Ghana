@@ -9,6 +9,7 @@ import com.gradebook.model.SchoolClass;
 import com.gradebook.model.Student;
 import com.gradebook.model.Subject;
 import com.gradebook.model.SubjectAssignment;
+import com.gradebook.model.Term;
 import com.gradebook.model.Teacher;
 import com.gradebook.repository.AdminRepository;
 import com.gradebook.repository.GradeRepository;
@@ -17,6 +18,7 @@ import com.gradebook.repository.SchoolClassRepository;
 import com.gradebook.repository.SchoolRepository;
 import com.gradebook.repository.StudentRepository;
 import com.gradebook.repository.SubjectAssignmentRepository;
+import com.gradebook.repository.TermRepository;
 import com.gradebook.repository.SubjectRepository;
 import com.gradebook.repository.TeacherRepository;
 import org.springframework.boot.CommandLineRunner;
@@ -54,6 +56,7 @@ public class DataSeeder implements CommandLineRunner {
     private final GradingScaleRepository scaleRepo;
     private final SchoolRepository schoolRepo;
     private final GradeRepository gradeRepo;
+    private final TermRepository termRepo;
     private final PasswordEncoder encoder;
     private final GradebookProperties props;
 
@@ -64,7 +67,7 @@ public class DataSeeder implements CommandLineRunner {
                       SubjectRepository subjectRepo, SchoolClassRepository classRepo,
                       SubjectAssignmentRepository assignmentRepo, AdminRepository adminRepo,
                       GradingScaleRepository scaleRepo, SchoolRepository schoolRepo,
-                      GradeRepository gradeRepo, PasswordEncoder encoder,
+                      GradeRepository gradeRepo, TermRepository termRepo, PasswordEncoder encoder,
                       GradebookProperties props) {
         this.teacherRepo = teacherRepo;
         this.studentRepo = studentRepo;
@@ -75,6 +78,7 @@ public class DataSeeder implements CommandLineRunner {
         this.scaleRepo = scaleRepo;
         this.schoolRepo = schoolRepo;
         this.gradeRepo = gradeRepo;
+        this.termRepo = termRepo;
         this.encoder = encoder;
         this.props = props;
     }
@@ -92,6 +96,15 @@ public class DataSeeder implements CommandLineRunner {
         school.setDemo(true);
         schoolRepo.save(school);
         seedSchool = school;
+
+        // --- Term: the configured semester, open ---
+        Term term = new Term();
+        term.setSchool(school);
+        term.setSemester(semester);
+        term.setName(TermService.defaultName(semester));
+        term.setDates("8 September to 12 December");
+        term.setOpen(true);
+        termRepo.save(term);
 
         // --- WAEC grading scale (admin-editable; these are the defaults) ---
         for (GradingScale s : AuthService.waecScaleRows()) {
@@ -230,6 +243,10 @@ public class DataSeeder implements CommandLineRunner {
         sc.setFormYear(formYear);
         sc.setClassTeacher(classTeacher);
         sc.setSchool(seedSchool);
+        // The demo school showcases published results (the student demo
+        // login shows a full report card immediately), so its classes
+        // start published; real schools start unpublished.
+        sc.setResultsPublished(true);
         return classRepo.save(sc);
     }
 

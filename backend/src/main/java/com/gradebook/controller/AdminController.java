@@ -20,6 +20,7 @@ import com.gradebook.repository.SubjectAssignmentRepository;
 import com.gradebook.repository.SubjectRepository;
 import com.gradebook.repository.TeacherRepository;
 import com.gradebook.service.CurrentUserService;
+import com.gradebook.service.GradeService;
 import com.gradebook.util.WaecGrading;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -71,6 +72,7 @@ public class AdminController {
     private final ReportCardRepository reportCards;
     private final SubjectAssignmentRepository assignments;
     private final PasswordEncoder passwordEncoder;
+    private final GradeService gradeService;
 
     public AdminController(CurrentUserService current, SchoolClassRepository classes,
                            SubjectRepository subjects, StudentRepository students,
@@ -78,7 +80,7 @@ public class AdminController {
                            AdminRepository admins, SchoolRepository schools, GradeRepository grades,
                            ReportCardRepository reportCards,
                            SubjectAssignmentRepository assignments,
-                           PasswordEncoder passwordEncoder) {
+                           PasswordEncoder passwordEncoder, GradeService gradeService) {
         this.current = current;
         this.classes = classes;
         this.subjects = subjects;
@@ -91,6 +93,7 @@ public class AdminController {
         this.reportCards = reportCards;
         this.assignments = assignments;
         this.passwordEncoder = passwordEncoder;
+        this.gradeService = gradeService;
     }
 
     // ---- DTOs ----
@@ -99,7 +102,11 @@ public class AdminController {
     public record SubjectRequest(String name, String programme, boolean isCore) {
     }
     public record StudentRequest(String fullName, String indexNumber, String programme,
-                                 int year, Long classId) {
+                                 int year, Long classId, String guardianName, String guardianPhone) {
+    }
+    public record PublishRequest(boolean published) {
+    }
+    public record WeightsRequest(int classWeightPercent) {
     }
     public record TeacherRequest(String fullName, String email, String subject, String password) {
     }
@@ -118,6 +125,7 @@ public class AdminController {
         m.put("formYear", c.getFormYear());
         m.put("classTeacherId", c.getClassTeacher() == null ? null : c.getClassTeacher().getId());
         m.put("classTeacherName", c.getClassTeacher() == null ? null : c.getClassTeacher().getFullName());
+        m.put("resultsPublished", c.isResultsPublished());
         return m;
     }
 
@@ -139,6 +147,8 @@ public class AdminController {
         m.put("year", s.getYear());
         m.put("classId", s.getSchoolClass() == null ? null : s.getSchoolClass().getId());
         m.put("className", s.getSchoolClass() == null ? null : s.getSchoolClass().getName());
+        m.put("guardianName", s.getGuardianName());
+        m.put("guardianPhone", s.getGuardianPhone());
         return m;
     }
 
@@ -214,6 +224,10 @@ public class AdminController {
         if (!ok) {
             throw new IllegalArgumentException(message);
         }
+    }
+
+    private static String blankToNull(String v) {
+        return v == null || v.trim().isEmpty() ? null : v.trim();
     }
 
     /** 8-character temporary password (no ambiguous characters). Shown once, to the admin. */
@@ -362,6 +376,21 @@ public class AdminController {
         return classDto(saved);
     }
 
+    /**
+     * Per-class publish switch (mockup screen 05): while a class is
+     * unpublished its students see none of its results, whatever the
+     * per-grade published flags say — the check is enforced again on the
+     * student endpoints, this flag is the persisted source of truth.
+     */
+    @PostMapping("/classes/{id}/publish")
+    public Map<String, Object> setClassPublished(Authentication auth, @PathVariable Long id,
+                                                 @RequestBody PublishRequest body) {
+        School school = current.currentSchool(auth);
+        SchoolClass c = requireClass(school, id);
+        c.setResultsPublished(body.published());
+        return classDto(classes.save(c));
+    }
+
     @DeleteMapping("/classes/{id}")
     public void deleteClass(Authentication auth, @PathVariable Long id) {
         School school = current.currentSchool(auth);
@@ -444,6 +473,9 @@ public class AdminController {
         s.setIndexNumber(body.indexNumber().trim());
         String temporaryPassword = generateTemporaryPassword();
         s.setPassword(passwordEncoder.encode(temporaryPassword));
+        s.setMustChangePassword(true);
+        s.setGuardianName(blankToNull(body.guardianName()));
+        s.setGuardianPhone(blankToNull(body.guardianPhone()));
         s.setProgramme(body.programme() == null ? "SCIENCE" : body.programme());
         s.setYear(body.year());
         s.setSchool(school);
@@ -485,7 +517,33 @@ public class AdminController {
         if (body.classId() != null) {
             s.setSchoolClass(requireClass(school, body.classId()));
         }
+        if (body.guardianName() != null) {
+            s.setGuardianName(blankToNull(body.guardianName()));
+        }
+        if (body.guardianPhone() != null) {
+            s.setGuardianPhone(blankToNull(body.guardianPhone()));
+        }
         return studentDto(students.save(s));
+    }
+
+    /**
+     * Reset a student's password (students have no email, so the admin is
+     * the reset channel): generates a new temporary password, returns it
+     * once, and flags the account so the student must choose their own
+     * password at the next login.
+     */
+    @PostMapping("/students/{id}/reset-password")
+    public Map<String, Object> resetStudentPassword(Authentication auth, @PathVariable Long id) {
+        School school = current.currentSchool(auth);
+        Student s = requireStudent(school, id);
+        String temporaryPassword = generateTemporaryPassword();
+        s.setPassword(passwordEncoder.encode(temporaryPassword));
+        s.setMustChangePassword(true);
+        Student saved = students.save(s);
+        Map<String, Object> out = studentDto(saved);
+        out.put("temporaryPassword", temporaryPassword);
+        out.put("loginUsername", saved.getIndexNumber());
+        return out;
     }
 
     @DeleteMapping("/students/{id}")
@@ -531,6 +589,9 @@ public class AdminController {
         t.setFullName(body.fullName().trim());
         t.setEmail(email);
         t.setPassword(passwordEncoder.encode(password));
+        // Every admin-issued password is temporary: the teacher chooses
+        // their own at first login (the mockup's choose-password screen).
+        t.setMustChangePassword(true);
         t.setSubject(body.subject() == null ? "" : body.subject().trim());
         t.setSchool(school);
         Teacher saved = teachers.save(t);
@@ -539,6 +600,47 @@ public class AdminController {
         if (temporaryPassword != null) {
             out.put("temporaryPassword", temporaryPassword);
         }
+        return out;
+    }
+
+    /** Edit a teacher's name, email and subject (password untouched). */
+    @PutMapping("/teachers/{id}")
+    public Map<String, Object> updateTeacher(Authentication auth, @PathVariable Long id,
+                                             @RequestBody TeacherRequest body) {
+        School school = current.currentSchool(auth);
+        Teacher t = requireTeacher(school, id);
+        if (body.fullName() != null && !body.fullName().isBlank()) {
+            t.setFullName(body.fullName().trim());
+        }
+        if (body.email() != null && !body.email().isBlank()
+                && !body.email().trim().equals(t.getEmail())) {
+            String email = body.email().trim();
+            require(email.contains("@"), "A valid teacher email is required");
+            require(teachers.findByEmail(email).isEmpty() && admins.findByEmail(email).isEmpty(),
+                    "That email is already registered: " + email);
+            t.setEmail(email);
+        }
+        if (body.subject() != null) {
+            t.setSubject(body.subject().trim());
+        }
+        return teacherDto(teachers.save(t));
+    }
+
+    /**
+     * Reset a teacher's password to a fresh temporary password (shown
+     * once, like create); the teacher must choose their own at next login.
+     */
+    @PostMapping("/teachers/{id}/reset-password")
+    public Map<String, Object> resetTeacherPassword(Authentication auth, @PathVariable Long id) {
+        School school = current.currentSchool(auth);
+        Teacher t = requireTeacher(school, id);
+        String temporaryPassword = generateTemporaryPassword();
+        t.setPassword(passwordEncoder.encode(temporaryPassword));
+        t.setMustChangePassword(true);
+        Teacher saved = teachers.save(t);
+        Map<String, Object> out = teacherDto(saved);
+        out.put("temporaryPassword", temporaryPassword);
+        out.put("loginUsername", saved.getEmail());
         return out;
     }
 
@@ -658,6 +760,36 @@ public class AdminController {
             out.add(m);
         }
         return out;
+    }
+
+    // ---- Mark weighting (class work % vs exam %) ----
+    @GetMapping("/weights")
+    public Map<String, Object> getWeights(Authentication auth) {
+        School school = current.currentSchool(auth);
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("classWeightPercent", school.getClassWeightPercent());
+        m.put("examWeightPercent", school.getExamWeightPercent());
+        return m;
+    }
+
+    /**
+     * Save the school's class/exam weighting and restamp every stored
+     * total with it, so the setting is real: totals everywhere (teacher
+     * grids, student results, report cards) follow the new split.
+     */
+    @PutMapping("/weights")
+    public Map<String, Object> updateWeights(Authentication auth, @RequestBody WeightsRequest body) {
+        School school = current.currentSchool(auth);
+        require(body.classWeightPercent() >= 0 && body.classWeightPercent() <= 100,
+                "Class work percent must be between 0 and 100");
+        school.setClassWeightPercent(body.classWeightPercent());
+        schools.save(school);
+        int updated = gradeService.recomputeSchoolTotals(school);
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("classWeightPercent", school.getClassWeightPercent());
+        m.put("examWeightPercent", school.getExamWeightPercent());
+        m.put("totalsUpdated", updated);
+        return m;
     }
 
     // ---- School profile ----

@@ -23,10 +23,20 @@ public final class WaecGrading {
 
     /** Total score = 30% class work + 70% exam, rounded to 2 decimals. Null when either component is missing. */
     public static Double total(Double classScore, Double examScore) {
+        return total(classScore, examScore, CLASS_WEIGHT, EXAM_WEIGHT);
+    }
+
+    /**
+     * Total with a school's own weighting (fractions that add up to 1,
+     * e.g. 0.30 / 0.70). Same contract: null when either component is
+     * missing, rounded to 2 decimals.
+     */
+    public static Double total(Double classScore, Double examScore,
+                               double classWeight, double examWeight) {
         if (classScore == null || examScore == null) {
             return null;
         }
-        return round2(classScore * CLASS_WEIGHT + examScore * EXAM_WEIGHT);
+        return round2(classScore * classWeight + examScore * examWeight);
     }
 
     /** WAEC letter grade for a total score out of 100. */

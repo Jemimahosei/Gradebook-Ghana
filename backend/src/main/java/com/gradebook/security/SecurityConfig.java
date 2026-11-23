@@ -31,9 +31,11 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Only login + public school signup are unauthenticated.
-                // /api/auth/me needs a token (it resolves the logged-in user).
-                .requestMatchers("/api/auth/login", "/api/auth/register-school").permitAll()
+                // Only login, public school signup and the forgot/reset
+                // password pair are unauthenticated. /api/auth/me and
+                // /api/auth/change-password need a token.
+                .requestMatchers("/api/auth/login", "/api/auth/register-school",
+                        "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

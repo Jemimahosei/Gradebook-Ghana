@@ -14,6 +14,7 @@ import com.gradebook.repository.SubjectAssignmentRepository;
 import com.gradebook.repository.SubjectRepository;
 import com.gradebook.repository.TeacherRepository;
 import com.gradebook.service.GradeService;
+import com.gradebook.service.TermService;
 import com.gradebook.util.RankingUtil;
 import com.gradebook.util.WaecGrading;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -46,12 +47,14 @@ public class TeacherController {
     private final GradeRepository gradeRepo;
     private final SubjectRepository subjectRepo;
     private final GradeService gradeService;
+    private final TermService termService;
     private final GradebookProperties props;
 
     public TeacherController(TeacherRepository teacherRepo, SchoolClassRepository classRepo,
                              SubjectAssignmentRepository assignmentRepo, StudentRepository studentRepo,
                              GradeRepository gradeRepo, SubjectRepository subjectRepo,
-                             GradeService gradeService, GradebookProperties props) {
+                             GradeService gradeService, TermService termService,
+                             GradebookProperties props) {
         this.teacherRepo = teacherRepo;
         this.classRepo = classRepo;
         this.assignmentRepo = assignmentRepo;
@@ -59,6 +62,7 @@ public class TeacherController {
         this.gradeRepo = gradeRepo;
         this.subjectRepo = subjectRepo;
         this.gradeService = gradeService;
+        this.termService = termService;
         this.props = props;
     }
 
@@ -83,7 +87,7 @@ public class TeacherController {
                 && !sc.getSchool().getId().equals(teacher.getSchool().getId())) {
             return Map.of("isClassTeacher", false); // class belongs to another school
         }
-        String semester = props.semester();
+        String semester = termService.currentSemester(teacher.getSchool());
         List<Student> students = studentRepo.findBySchoolClass(sc);
         List<Grade> grades = gradeRepo.findBySchoolClassAndSemester(sc, semester);
 
@@ -203,7 +207,7 @@ public class TeacherController {
             throw new IllegalArgumentException("Not a class teacher");
         }
         List<Map<String, Object>> result = new ArrayList<>();
-        for (RankingUtil.RankedEntry e : gradeService.classRankings(sc, props.semester())) {
+        for (RankingUtil.RankedEntry e : gradeService.classRankings(sc, termService.currentSemester(teacherOpt.get().getSchool()))) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("rank", e.rank());
             m.put("studentId", e.studentId());
@@ -226,7 +230,7 @@ public class TeacherController {
                 && !sc.getSchool().getId().equals(teacher.getSchool().getId())) {
             throw new IllegalArgumentException("Not a class teacher");
         }
-        List<Grade> grades = gradeRepo.findBySchoolClassAndSemester(sc, props.semester());
+        List<Grade> grades = gradeRepo.findBySchoolClassAndSemester(sc, termService.currentSemester(teacher.getSchool()));
         grades.forEach(g -> g.setPublished(true));
         gradeRepo.saveAll(grades);
         return Map.of("status", "published", "count", String.valueOf(grades.size()));

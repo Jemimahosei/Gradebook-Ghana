@@ -59,6 +59,8 @@ public class StudentController {
         m.put("year", s.getYear());
         m.put("classId", s.getSchoolClass() == null ? null : s.getSchoolClass().getId());
         m.put("className", s.getSchoolClass() == null ? null : s.getSchoolClass().getName());
+        m.put("guardianName", s.getGuardianName());
+        m.put("guardianPhone", s.getGuardianPhone());
         return m;
     }
 }

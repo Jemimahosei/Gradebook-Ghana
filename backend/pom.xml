@@ -29,6 +29,9 @@
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-jpa</artifactId></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-security</artifactId></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-validation</artifactId></dependency>
+    <!-- Password-reset emails. Only used when SPRING_MAIL_HOST is configured;
+         without it the reset link is logged server-side instead. -->
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-mail</artifactId></dependency>
     <dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><scope>runtime</scope></dependency>
     <!-- PDF report cards. (The original pom declared iText 7 but never used it;
          OpenPDF is used instead — Apache-2.0 licensed, and the report service

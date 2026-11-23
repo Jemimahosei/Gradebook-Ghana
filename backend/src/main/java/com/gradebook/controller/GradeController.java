@@ -12,6 +12,7 @@ import com.gradebook.repository.SubjectRepository;
 import com.gradebook.repository.TeacherRepository;
 import com.gradebook.service.CurrentUserService;
 import com.gradebook.service.GradeService;
+import com.gradebook.service.TermService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -42,18 +43,20 @@ public class GradeController {
     private final TeacherRepository teacherRepo;
     private final GradeService gradeService;
     private final CurrentUserService current;
+    private final TermService termService;
     private final GradebookProperties props;
 
     public GradeController(GradeRepository gradeRepo, StudentRepository studentRepo,
                            SubjectRepository subjectRepo, TeacherRepository teacherRepo,
                            GradeService gradeService, CurrentUserService current,
-                           GradebookProperties props) {
+                           TermService termService, GradebookProperties props) {
         this.gradeRepo = gradeRepo;
         this.studentRepo = studentRepo;
         this.subjectRepo = subjectRepo;
         this.teacherRepo = teacherRepo;
         this.gradeService = gradeService;
         this.current = current;
+        this.termService = termService;
         this.props = props;
     }
 
@@ -84,7 +87,12 @@ public class GradeController {
     public Map<String, Object> saveBatch(Authentication auth, @RequestBody List<GradeRequest> requests) {
         Teacher teacher = current.currentTeacher(auth);
         com.gradebook.model.School school = current.schoolOfTeacher(teacher);
-        String semester = props.semester();
+        // Marks belong to the school's open term; a closed term is locked.
+        if (!termService.marksOpen(school)) {
+            throw new IllegalArgumentException(
+                    "The current term is closed — marks are locked. An admin can reopen it from the Terms page.");
+        }
+        String semester = termService.currentSemester(school);
         int saved = 0;
         for (GradeRequest req : requests) {
             // Subject names are only unique within a school — look it up there.

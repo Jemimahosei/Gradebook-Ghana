@@ -46,7 +46,8 @@ public class GradeService {
 
     /** Create or update one student's grade in one subject (30/70 components).
      * All three parties must belong to the same school — a teacher can only
-     * grade their own school's students in their own school's subjects. */
+     * grade their own school's students in their own school's subjects.
+     * The total uses the school's own class/exam weighting. */
     public Grade enterGrade(Long studentId, Long subjectId, Teacher teacher,
                             Double classScore, Double examScore, String semester) {
         WaecGrading.validateScore(classScore, "classScore");
@@ -66,7 +67,39 @@ public class GradeService {
         grade.setClassScore(classScore);
         grade.setExamScore(examScore);
         grade.setSemester(semester);
+        // The entity recomputes with the default 30/70 split; restamp the
+        // total with the school's configured weighting.
+        grade.setScore(totalFor(teacher.getSchool(), classScore, examScore));
         return gradeRepo.save(grade);
+    }
+
+    /** Weighted total for a school (default 30/70 when the school is unknown). */
+    public static Double totalFor(School school, Double classScore, Double examScore) {
+        if (school == null) {
+            return WaecGrading.total(classScore, examScore);
+        }
+        return WaecGrading.total(classScore, examScore,
+                school.getClassWeightPercent() / 100.0, school.getExamWeightPercent() / 100.0);
+    }
+
+    /**
+     * Recompute every stored total of a school with its current weighting.
+     * Called when the admin changes the weighting, so existing marks are
+     * restamped instead of silently keeping totals from the old split.
+     */
+    public int recomputeSchoolTotals(School school) {
+        int updated = 0;
+        for (Student student : studentRepo.findBySchool(school)) {
+            for (Grade g : gradeRepo.findByStudentId(student.getId())) {
+                Double total = totalFor(school, g.getClassScore(), g.getExamScore());
+                if (!Objects.equals(total, g.getScore())) {
+                    g.setScore(total);
+                    gradeRepo.save(g);
+                    updated++;
+                }
+            }
+        }
+        return updated;
     }
 
     /** True when teacher, student and subject all belong to the same school. */

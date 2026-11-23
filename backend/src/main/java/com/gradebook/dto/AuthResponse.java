@@ -12,6 +12,9 @@ public class AuthResponse {
     private Long schoolId;
     private String schoolName;
     private boolean demoSchool;
+    /** True while the account runs on a temporary password: the client
+     * must send the user to the choose-password screen first. */
+    private boolean mustChangePassword;
 
     public AuthResponse(String token, String role, String name) {
         this.token = token; this.role = role; this.name = name;
@@ -23,10 +26,18 @@ public class AuthResponse {
         this.schoolId = schoolId; this.schoolName = schoolName; this.demoSchool = demoSchool;
     }
 
+    public AuthResponse(String token, String role, String name,
+                        Long schoolId, String schoolName, boolean demoSchool,
+                        boolean mustChangePassword) {
+        this(token, role, name, schoolId, schoolName, demoSchool);
+        this.mustChangePassword = mustChangePassword;
+    }
+
     public String getToken() { return token; }
     public String getRole() { return role; }
     public String getName() { return name; }
     public Long getSchoolId() { return schoolId; }
     public String getSchoolName() { return schoolName; }
     public boolean isDemoSchool() { return demoSchool; }
+    public boolean isMustChangePassword() { return mustChangePassword; }
 }

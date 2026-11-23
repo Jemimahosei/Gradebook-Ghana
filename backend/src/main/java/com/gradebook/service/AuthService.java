@@ -84,7 +84,8 @@ public class AuthService {
             School school = current.schoolOfStudent(student);
             return new AuthResponse(jwtUtil.generateToken(student.getIndexNumber(), "STUDENT"),
                     "STUDENT", student.getFullName(),
-                    school.getId(), school.getName(), school.isDemo());
+                    school.getId(), school.getName(), school.isDemo(),
+                    student.isMustChangePassword());
         }
 
         Optional<Admin> admin = adminRepo.findByEmail(username);
@@ -95,7 +96,8 @@ public class AuthService {
             School school = current.schoolOfAdmin(admin.get());
             return new AuthResponse(jwtUtil.generateToken(admin.get().getEmail(), "ADMIN"),
                     "ADMIN", admin.get().getFullName(),
-                    school.getId(), school.getName(), school.isDemo());
+                    school.getId(), school.getName(), school.isDemo(),
+                    admin.get().isMustChangePassword());
         }
 
         Teacher teacher = teacherRepo.findByEmail(username)
@@ -106,7 +108,8 @@ public class AuthService {
         School school = current.schoolOfTeacher(teacher);
         return new AuthResponse(jwtUtil.generateToken(teacher.getEmail(), "TEACHER"),
                 "TEACHER", teacher.getFullName(),
-                school.getId(), school.getName(), school.isDemo());
+                school.getId(), school.getName(), school.isDemo(),
+                teacher.isMustChangePassword());
     }
 
     /** Who is logged in (for clients whose stored session predates school info). */
@@ -122,12 +125,19 @@ public class AuthService {
         String role = isAdmin ? "ADMIN" : isTeacher ? "TEACHER" : "STUDENT";
         School school = current.currentSchool(auth);
         String name;
+        boolean mustChange;
         if (isAdmin) {
-            name = current.currentAdmin(auth).getFullName();
+            Admin a = current.currentAdmin(auth);
+            name = a.getFullName();
+            mustChange = a.isMustChangePassword();
         } else if (isTeacher) {
-            name = current.currentTeacher(auth).getFullName();
+            Teacher t = current.currentTeacher(auth);
+            name = t.getFullName();
+            mustChange = t.isMustChangePassword();
         } else {
-            name = current.currentStudent(auth).getFullName();
+            Student s = current.currentStudent(auth);
+            name = s.getFullName();
+            mustChange = s.isMustChangePassword();
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("name", name);
@@ -135,7 +145,43 @@ public class AuthService {
         out.put("schoolId", school.getId());
         out.put("schoolName", school.getName());
         out.put("demoSchool", school.isDemo());
+        out.put("mustChangePassword", mustChange);
         return out;
+    }
+
+    /**
+     * Set a new password for the logged-in user (the first-login
+     * choose-password flow, and a general change-password). Clears the
+     * must-change flag. The current JWT stays valid — it carries only
+     * the username and role.
+     */
+    @Transactional
+    public Map<String, Object> changePassword(Authentication auth, String newPassword) {
+        if (newPassword == null || newPassword.length() < 6) {
+            throw new IllegalArgumentException("Password must be at least 6 characters");
+        }
+        boolean isAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        boolean isTeacher = auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_TEACHER"));
+        String hash = encoder.encode(newPassword);
+        if (isAdmin) {
+            Admin a = current.currentAdmin(auth);
+            a.setPassword(hash);
+            a.setMustChangePassword(false);
+            adminRepo.save(a);
+        } else if (isTeacher) {
+            Teacher t = current.currentTeacher(auth);
+            t.setPassword(hash);
+            t.setMustChangePassword(false);
+            teacherRepo.save(t);
+        } else {
+            Student s = current.currentStudent(auth);
+            s.setPassword(hash);
+            s.setMustChangePassword(false);
+            studentRepo.save(s);
+        }
+        return Map.of("status", "changed", "mustChangePassword", false);
     }
 
     /**
