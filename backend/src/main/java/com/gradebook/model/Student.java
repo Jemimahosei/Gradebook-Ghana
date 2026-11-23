@@ -20,6 +20,7 @@ public class Student {
      * password: the login response carries the flag and the app forces
      * the choose-password screen before anything else.
      */
+    @Column(columnDefinition = "boolean default false")
     private boolean mustChangePassword = false;
 
     @ManyToOne

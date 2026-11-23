@@ -21,6 +21,7 @@ public class SchoolClass {
      * published flag set by the teacher publish). Defaults to hidden —
      * the admin publishes when the term's results are ready.
      */
+    @Column(columnDefinition = "boolean default false")
     private boolean resultsPublished = false;
 
     /** The school this class belongs to. Null only for pre-upgrade rows (backfilled on boot). */

@@ -31,6 +31,7 @@ public class School {
      * default is 30 (exam 70). Used by GradeService when a total is
      * (re)computed.
      */
+    @Column(columnDefinition = "integer default 30")
     private int classWeightPercent = 30;
 
     public School() {

@@ -12,6 +12,7 @@ public class Teacher {
     private String subject;
     private String role = "TEACHER";
     /** True while on an admin-issued password — see Student.mustChangePassword. */
+    @Column(columnDefinition = "boolean default false")
     private boolean mustChangePassword = false;
 
     /** The school this teacher works for. Null only for pre-upgrade rows (backfilled on boot). */

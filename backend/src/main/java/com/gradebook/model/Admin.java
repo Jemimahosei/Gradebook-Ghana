@@ -18,6 +18,7 @@ public class Admin {
     @Column(nullable = false) private String password; // BCrypt hash
     private String role = "ADMIN";
     /** True while on a temporary password — see Student.mustChangePassword. */
+    @Column(columnDefinition = "boolean default false")
     private boolean mustChangePassword = false;
 
     /** The school this admin manages. Null only for pre-upgrade rows (backfilled on boot). */
